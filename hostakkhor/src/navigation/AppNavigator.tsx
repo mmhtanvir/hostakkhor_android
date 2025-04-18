@@ -3,6 +3,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import WelcomeScreen from '../screens/WelcomeScreen';
 import SignInScreen from '../screens/SignInScreen';
 import HomeScreen from '../screens/HomeScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import { RootStackParamList } from '../types/navigation';
 import { colors } from '../styles/globalStyles';
@@ -40,6 +41,9 @@ const AppNavigator = () => {
         component={SignInScreen} 
         options={{ title: 'Sign In' }}
       />
+      <Stack.Screen 
+      name="EditProfile" 
+      component={EditProfileScreen} />
 
       {/* Main App Screens */}
       <Stack.Screen 
@@ -54,7 +58,7 @@ const AppNavigator = () => {
   name="Profile" 
   component={ProfileScreen} 
   options={{ 
-    headerShown: false,  // This will hide the default navigation header
+    headerShown: false,  
     title: 'My Profile' 
   }}
 />

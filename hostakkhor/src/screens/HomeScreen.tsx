@@ -1,7 +1,6 @@
 import React from 'react';
 import { ScrollView, TouchableOpacity, Text, View, TextInput, Image } from 'react-native';
 import Header from '../components/Header';
-import Footer from '../components/Footer';
 import { globalStyles } from '../styles/globalStyles';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -146,7 +145,7 @@ const HomeScreen = () => {
         ))}
       </ScrollView>
 
-      <Footer />
+      
     </View>
   );
 };

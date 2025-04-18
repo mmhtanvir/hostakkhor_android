@@ -870,7 +870,7 @@ export const globalStyles = StyleSheet.create({
   pinnedProfileImageLarge: {
     width: 120,
     height: 120,
-    borderRadius: 60,
+    borderRadius: 90,
     borderWidth: 4,
     borderColor: '#B35F24',
   },
@@ -1055,5 +1055,101 @@ themeCardLabel: {
   fontWeight: '600',
   color: '#333',
 },
-  
+avatarLarge: {
+  width: 100,
+  height: 100,
+  borderRadius: 50,
+},
+
+cameraIconContainer: {
+  position: 'absolute',
+  bottom: 0,
+  right: 0,
+  backgroundColor: '#fff',
+  padding: 6,
+  borderRadius: 50,
+  elevation: 2,
+},
+
+cameraIcon: {
+  width: 20,
+  height: 20,
+},
+
+linkText: {
+  fontSize: 16,
+  color: '#000',
+},
+
+textArea: {
+  borderWidth: 1,
+  borderColor: '#ddd',
+  borderRadius: 8,
+  padding: 10,
+  minHeight: 100,
+  fontSize: 16,
+  marginTop: 6,
+  backgroundColor: '#fff',
+},
+
+caption: {
+  fontSize: 13,
+  color: '#777',
+  marginTop: 4,
+},
+
+buttonPrimary: {
+  backgroundColor: '#9d5c14',
+  padding: 14,
+  borderRadius: 10,
+  alignItems: 'center',
+},
+
+editbuttonText: {
+  color: '#fff',
+  fontWeight: '600',
+  fontSize: 16,
+},
+
+buttonOutlined: {
+  borderWidth: 1,
+  borderColor: '#ccc',
+  padding: 14,
+  borderRadius: 10,
+  alignItems: 'center',
+},
+
+buttonTextOutlined: {
+  color: '#000',
+  fontWeight: '500',
+  fontSize: 16,
+},
+title: {
+  fontSize: 22,
+  fontWeight: '700',
+  color: '#111',
+  marginBottom: 10,
+  textAlign: 'center',
+},
+
+card: {
+  backgroundColor: '#fff',
+  borderRadius: 12,
+  padding: 20,
+  marginHorizontal: 16,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+  elevation: 2,
+},
+
+label: {
+  fontSize: 16,
+  fontWeight: '500',
+  marginTop: 16,
+  marginBottom: 6,
+  color: '#333',
+},
+
 });

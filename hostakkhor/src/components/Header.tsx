@@ -50,7 +50,11 @@ const Header = ({ onLogoPress, onProfilePress, showSignIn, showProfile }: any) =
   return (
     <View style={globalStyles.header}>
       {/* Logo */}
-      <TouchableOpacity onPress={onLogoPress}>
+      <TouchableOpacity
+                onPress={() => {
+                  setShowDropdown(false);
+                  navigation.navigate('Home');
+                }}>
         <SvgUri
           width="40"
           height="40"

@@ -13,6 +13,7 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import { globalStyles } from '../styles/globalStyles';
 import Header from '../components/Header';
 import { Svg, Path, Circle } from 'react-native-svg';
+import { useNavigation } from '@react-navigation/native';
 
 export const GalleryIcon = ({ width = 20, height = 20, color = '#000' }) => (
   <Svg width={width} height={height} viewBox="0 0 24 24" fill="none">
@@ -81,6 +82,7 @@ export const PaintbrushIcon = ({ width = 20, height = 20, color = '#fff' }) => (
 );
 
 const ProfileScreen = () => {
+  const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState('Posts');
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState('default');
@@ -95,7 +97,10 @@ const ProfileScreen = () => {
           <Text style={globalStyles.profileName}>Mahamudul Hasan Tanvir</Text>
           <Text style={globalStyles.profileEmail}>mahamudul.tanvirr@gmail.com</Text>
           <Text style={globalStyles.profileDate}>Joined 15 Apr 2025</Text>
-          <TouchableOpacity style={globalStyles.editProfileButton}>
+          <TouchableOpacity
+            style={globalStyles.editProfileButton}
+            onPress={() => navigation.navigate('EditProfile')}
+          >
             <Icon name="pencil" size={14} color="#000" style={{ marginRight: 6 }} />
             <Text style={globalStyles.editProfileText}>Edit Profile</Text>
           </TouchableOpacity>
@@ -223,6 +228,13 @@ const ProfileScreen = () => {
       >
         <View style={globalStyles.modalBackdrop}>
           <View style={globalStyles.themeModal}>
+            <TouchableOpacity
+              onPress={() => setThemeModalVisible(false)}
+              style={{ position: 'absolute', top: 10, right: 10, zIndex: 10 }}
+            >
+              <Icon name="close" size={20} color="#333" />
+            </TouchableOpacity>
+
             <Text style={globalStyles.modalTitle}>Select Pinned Post Theme</Text>
             <View style={globalStyles.themeOptionsRow}>
               {['default', 'golden'].map((theme) => (
@@ -263,5 +275,5 @@ const ProfileScreen = () => {
     </View>
   );
 };
-       
+
 export default ProfileScreen;

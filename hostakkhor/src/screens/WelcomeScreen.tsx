@@ -1,11 +1,9 @@
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { globalStyles } from '../styles/globalStyles';
 import Header from '../components/Header';
-import Footer from '../components/Footer';
 
 const WelcomeScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -34,7 +32,7 @@ const WelcomeScreen = () => {
         </TouchableOpacity>
       </ScrollView>
 
-      <Footer />
+      
     </View>
   );
 };
