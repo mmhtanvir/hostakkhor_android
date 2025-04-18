@@ -5,8 +5,12 @@ export type RootStackParamList = {
   SignIn: undefined;
   Home: undefined;
   Profile: undefined;
-  PostDetail: { postId: number };
+  EditProfile: undefined;
+  CreatePost: undefined;     
+  CreatePage: undefined;     
+  PostDetail: { postId: number }; 
 };
+
 
 export type ScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<
   RootStackParamList, 

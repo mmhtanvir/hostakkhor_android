@@ -87,7 +87,7 @@ const HomeScreen = () => {
 
         <TouchableOpacity
           style={globalStyles.actionButton}
-          onPress={() => navigation.navigate('Welcome')}
+          onPress={() => navigation.navigate('CreatePage')}
         >
           <View style={globalStyles.actionButtonContent}>
             <PageIcon />
@@ -97,7 +97,7 @@ const HomeScreen = () => {
 
         <TouchableOpacity
           style={[globalStyles.actionButton, { marginTop: 12 }]}
-          onPress={() => navigation.navigate('Welcome')}
+          onPress={() => navigation.navigate('CreatePost')}
         >
           <View style={globalStyles.actionButtonContent}>
             <PencilIcon />
