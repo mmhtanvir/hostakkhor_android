@@ -613,9 +613,6 @@ export const globalStyles = StyleSheet.create({
     borderBottomWidth: 2,
     borderColor: 'transparent',
   },
-  activeTabButton: {
-    borderColor: colors.primary,
-  },
   tabButtonText: {
     fontSize: 14,
     fontFamily: fonts.medium,
@@ -1150,6 +1147,58 @@ label: {
   marginTop: 16,
   marginBottom: 6,
   color: '#333',
+},
+disabledButton: {
+  backgroundColor: '#cccccc',
+  opacity: 0.6,
+},
+
+disabledLink: {
+  color: '#999999',
+  textDecorationLine: 'none',
+},
+
+authorInfo: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginTop: 10,
+},
+authorAvatar: {
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  marginRight: 8,
+},
+authorTextContainer: {
+  flexDirection: 'column',
+},
+postCategory: {
+  marginTop: 8,
+  fontSize: 14,
+  fontWeight: 'bold',
+  color: '#555',
+},
+mediaIcons: {
+  flexDirection: 'row',
+  marginTop: 8,
+},
+audioIcon: {
+  marginRight: 10,
+  fontSize: 14,
+},
+videoIcon: {
+  fontSize: 14,
+},
+likeCommentSection: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginTop: 12,
+},
+likeText: {
+  fontSize: 14,
+},
+commentText: {
+  fontSize: 14,
 },
 
 });

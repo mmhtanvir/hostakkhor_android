@@ -1,16 +1,100 @@
-import React from 'react';
-import { ScrollView, TouchableOpacity, Text, View, TextInput, Image } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { 
+  ScrollView, 
+  TouchableOpacity, 
+  Text, 
+  View, 
+  TextInput, 
+  Image, 
+  ActivityIndicator,
+  RefreshControl 
+} from 'react-native';
 import Header from '../components/Header';
 import { globalStyles } from '../styles/globalStyles';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
+import { IPost } from '../types/ipost'; 
 import { Svg, Path, Line, Polyline } from 'react-native-svg';
+
+const API_BASE_URL = 'https://proxy.hostakkhor.com/proxy';
 
 const HomeScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [posts, setPosts] = useState<IPost[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [filter, setFilter] = useState<string>('All');
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [page, setPage] = useState<number>(0);
+  const [hasMore, setHasMore] = useState<boolean>(true);
 
-  // Icons
+  const fetchPosts = async (reset: boolean = false) => {
+    try {
+      if (reset) {
+        setPage(0);
+        setLoading(true);
+        setPosts([]); // Clear posts on reset
+      }
+  
+      const skip = reset ? 0 : page * 10;
+      const url = `${API_BASE_URL}/getsorted?keys=hostakkhor_posts_*&skip=${skip}&limit=1000`;
+  
+      console.log(`Fetching posts from: ${url}`); // Debugging
+      const response = await fetch(url, {
+        method: 'GET', // Explicit GET request
+      });
+  
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+  
+      const data = await response.json();
+      console.log('Fetched data:', data); // Debugging
+  
+      if (data.result && Array.isArray(data.result)) {
+        // Extract posts from the nested structure
+        const newPosts = data.result.map((item: any) => item.value);
+  
+        setPosts((prev) => (reset ? newPosts : [...prev, ...newPosts]));
+        setHasMore(newPosts.length === 10); // Check if there are more posts
+        setPage((prev) => (reset ? 1 : prev + 1));
+      } else {
+        console.error('Unexpected response structure:', data);
+        setHasMore(false); // No further fetching
+      }
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPosts(true);
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchPosts(true);
+  }, []);
+
+  const loadMorePosts = useCallback(() => {
+    if (!loading && hasMore) {
+      fetchPosts();
+    }
+  }, [loading, hasMore]);
+
+  const filteredPosts = posts.filter(post => {
+    const matchesSearch = post.author?.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                         post.content?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFilter = filter === 'All' || post.category === filter;
+    return matchesSearch && matchesFilter;
+  });
+
+  const categories = ['All', ...new Set(posts.map(post => post.category).filter(Boolean))];
+
   const PenIcon = () => (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
       <Path d="M12 20h9" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -41,34 +125,29 @@ const HomeScreen = () => {
     </Svg>
   );
 
-  // Sample post data
-  const posts = [
-    {
-      id: 1,
-      author: "John Doe",
-      location: "Cairo, Egypt",
-      image: require("../assets/images/post1.jpg"),
-    },
-    {
-      id: 2,
-      author: "Jane Smith",
-      location: "Unknown",
-      image: require("../assets/images/post1.jpg"),
-    }
-  ];
-
   return (
     <View style={globalStyles.container}>
       <Header
         onLogoPress={() => navigation.navigate('Home')}
         onProfilePress={() => navigation.navigate('Profile')}
-        showSignIn={false}      
-        showProfile={true}      
+        showSignIn={false}
+        showProfile={true}
       />
 
-      <ScrollView
-        style={globalStyles.content}
+      <ScrollView 
+        style={globalStyles.content} 
         contentContainerStyle={globalStyles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#000000']}
+            tintColor={'#000000'}
+            progressBackgroundColor={'#ffffff'}
+          />
+        }
+        scrollEventThrottle={400}
       >
         <View style={globalStyles.archiveHeader}>
           <PenIcon />
@@ -88,6 +167,7 @@ const HomeScreen = () => {
         <TouchableOpacity
           style={globalStyles.actionButton}
           onPress={() => navigation.navigate('CreatePage')}
+          activeOpacity={0.7}
         >
           <View style={globalStyles.actionButtonContent}>
             <PageIcon />
@@ -98,6 +178,7 @@ const HomeScreen = () => {
         <TouchableOpacity
           style={[globalStyles.actionButton, { marginTop: 12 }]}
           onPress={() => navigation.navigate('CreatePost')}
+          activeOpacity={0.7}
         >
           <View style={globalStyles.actionButtonContent}>
             <PencilIcon />
@@ -108,7 +189,6 @@ const HomeScreen = () => {
         <Text style={globalStyles.archiveTitle}>Handwriting Archives</Text>
         <Text style={globalStyles.archiveSubtitle}>
           Browse our collection of handwriting samples with accompanying audio recordings.
-          Each entry preserves the unique penmanship and voice of the contributor.
         </Text>
 
         <View style={globalStyles.searchContainer}>
@@ -117,40 +197,90 @@ const HomeScreen = () => {
             placeholder="Search posts..."
             placeholderTextColor="#aaa"
             style={globalStyles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
           />
         </View>
 
-        <View style={globalStyles.filterContainer}>
-          <TouchableOpacity style={globalStyles.filterButton}>
-            <Text style={globalStyles.filterButtonText}>All</Text>
-          </TouchableOpacity>
-        </View>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={globalStyles.filterContainer}
+          contentContainerStyle={{ paddingHorizontal: 8 }}
+        >
+          {categories.map(category => (
+            <TouchableOpacity 
+              key={category}
+              style={[globalStyles.filterButton, filter === category && globalStyles.filterButtonActive]}
+              onPress={() => setFilter(category)}
+            >
+              <Text style={[globalStyles.filterButtonText, filter === category && globalStyles.filterButtonTextActive]}>
+                {category}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-        {posts.map(post => (
-          <TouchableOpacity 
-            key={post.id}
-            style={globalStyles.postCard}
-            onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
-          >
-            <Image 
-              source={post.image} 
-              style={globalStyles.postImage}
-              resizeMode="cover"
-            />
-            <View style={globalStyles.postInfo}>
-              <Text style={globalStyles.postAuthor}>{post.author}</Text>
-              <Text style={globalStyles.postLocation}>{post.location}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+        {loading && !refreshing && posts.length === 0 ? (
+          <ActivityIndicator size="large" color="#000" style={{ marginTop: 20 }} />
+        ) : filteredPosts.length > 0 ? (
+          filteredPosts.map(post => (
+            <TouchableOpacity
+              key={post.id}
+              style={globalStyles.postCard}
+              onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
+              activeOpacity={0.8}
+            >
+              {post.images?.[0] ? (
+                <Image
+                  source={{ uri: post.images[0] }}
+                  style={globalStyles.postImage}
+                  resizeMode="cover"
+                  onError={() => console.log('Image load failed')}
+                />
+              ) : (
+                <View style={[globalStyles.postImage, globalStyles.postImagePlaceholder]}>
+                  <Text style={globalStyles.postImagePlaceholderText}>No Image</Text>
+                </View>
+              )}
+
+              <View style={globalStyles.postInfo}>
+                <Text style={globalStyles.postAuthor} numberOfLines={1}>
+                  {post.author?.name || 'Unknown'}
+                </Text>
+                {post.category && (
+                  <Text style={globalStyles.postLocation} numberOfLines={1}>
+                    {post.category}
+                  </Text>
+                )}
+                {post.content && (
+                  <Text style={globalStyles.postContent} numberOfLines={2}>
+                    {post.content}
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <View style={globalStyles.noPostsContainer}>
+            <Text style={globalStyles.noPostsText}>
+              {searchQuery || filter !== 'All' 
+                ? 'No posts found matching your criteria' 
+                : 'No posts available'}
+            </Text>
+          </View>
+        )}
+
+        {loading && posts.length > 0 && (
+          <ActivityIndicator size="small" color="#000" style={{ marginVertical: 20 }} />
+        )}
       </ScrollView>
-
-      
     </View>
   );
 };
 
 export default HomeScreen;
+
 
 
 

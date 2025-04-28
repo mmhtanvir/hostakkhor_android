@@ -9,13 +9,25 @@ import CreatePost from '../screens/CreatePosts';
 import CreatePage from '../screens/CreatePages';
 import { RootStackParamList } from '../types/navigation';
 import { colors } from '../styles/globalStyles';
+import { useAuth } from '../contexts/AuthContext';
+import { ActivityIndicator, View } from 'react-native';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
 const AppNavigator = () => {
+  const { loading } = useAuth(); // removed isAuthenticated
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <Stack.Navigator
-      initialRouteName="Welcome"
+      initialRouteName="Home" // Always start with Home
       screenOptions={{
         headerShown: true,
         headerStyle: {
@@ -32,13 +44,41 @@ const AppNavigator = () => {
         cardStyle: { backgroundColor: colors.white },
       }}
     >
-      <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="SignIn" component={SignInScreen} options={{ title: 'Sign In' }} />
-      <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-      <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false, gestureEnabled: false }} />
-      <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false, title: 'My Profile' }} />
-      <Stack.Screen name="CreatePost" component={CreatePost} />
-      <Stack.Screen name="CreatePage" component={CreatePage} />
+      <Stack.Screen 
+        name="Welcome" 
+        component={WelcomeScreen} 
+        options={{ headerShown: false }} 
+      />
+      <Stack.Screen 
+        name="SignIn" 
+        component={SignInScreen} 
+        options={{ title: 'Sign In' }} 
+      />
+      <Stack.Screen 
+        name="Home" 
+        component={HomeScreen} 
+        options={{ headerShown: false, gestureEnabled: false }} 
+      />
+      <Stack.Screen 
+        name="Profile" 
+        component={ProfileScreen} 
+        options={{ title: 'My Profile' }} 
+      />
+      <Stack.Screen 
+        name="EditProfile" 
+        component={EditProfileScreen} 
+        options={{ title: 'Edit Profile' }} 
+      />
+      <Stack.Screen 
+        name="CreatePost" 
+        component={CreatePost} 
+        options={{ title: 'Create Post' }} 
+      />
+      <Stack.Screen 
+        name="CreatePage" 
+        component={CreatePage} 
+        options={{ title: 'Create Page' }} 
+      />
     </Stack.Navigator>
   );
 };
