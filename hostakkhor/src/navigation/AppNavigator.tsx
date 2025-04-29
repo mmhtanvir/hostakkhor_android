@@ -7,6 +7,7 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import CreatePost from '../screens/CreatePosts';
 import CreatePage from '../screens/CreatePages';
+import PostDetailsScreen from '../screens/PostScreen'; // Import the PostDetail screen
 import { RootStackParamList } from '../types/navigation';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../contexts/AuthContext';
@@ -78,6 +79,11 @@ const AppNavigator = () => {
         name="CreatePage" 
         component={CreatePage} 
         options={{ title: 'Create Page' }} 
+      />
+      <Stack.Screen 
+        name="PostDetail" 
+        component={PostDetailsScreen} // Register the PostDetail screen here
+        options={{ title: 'Post Details' }} 
       />
     </Stack.Navigator>
   );

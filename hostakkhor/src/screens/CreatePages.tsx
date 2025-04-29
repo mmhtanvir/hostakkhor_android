@@ -26,8 +26,8 @@ const CreatePage = () => {
           <View style={styles.imagePickerContainer}>
             <TouchableOpacity style={styles.imageCircle}>
               <Image
-                source={{ uri: 'https://cdn-icons-png.flaticon.com/512/1829/1829586.png' }}
-                style={styles.imageIcon}
+                source={{ uri: 'https://cdn-icons-png.flaticon.com/512/685/685655.png' }}
+                style={styles.onlycameraIcon}
               />
             </TouchableOpacity>
             <TouchableOpacity style={styles.cameraIconWrapper}>
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  imageIcon: { width: 30, height: 30, tintColor: '#999' },
+  onlycameraIcon: { width: 30, height: 30, tintColor: '#999' },
   cameraIconWrapper: {
     position: 'absolute',
     bottom: 0,

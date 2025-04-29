@@ -2,7 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Linking } from 'react-native';
-import { SSO_SERVER_URL, CLIENT_ID, REDIRECT_URL} from '@env';
+import queryString from 'query-string';
+import { SSO_SERVER_URL, CLIENT_ID } from '@env'; // Ensure these environment variables are properly set
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -31,6 +32,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const REDIRECT_URL = "hostakkhor://auth"; // This matches the SSO server configuration
+
   // Initialize auth state from AsyncStorage
   useEffect(() => {
     const initAuth = async () => {
@@ -48,13 +51,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             setUser(JSON.parse(storedUser));
             setIsAuthenticated(true);
           } else {
-            try {
-              await fetchUserProfile(storedToken);
-              setIsAuthenticated(true);
-            } catch (error) {
-              console.error('Failed to fetch user profile during init.');
-              // Already handled inside fetchUserProfile
-            }
+            await fetchUserProfile(storedToken);
           }
         }
       } catch (error) {
@@ -69,11 +66,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Handle deep linking for SSO callback
   useEffect(() => {
-    const handleDeepLink = async (event: { url: string }) => {
+    const handleLink = async ({ url }: { url: string }) => {
       try {
-        const url = new URL(event.url);
-        const authToken = url.searchParams.get('auth_token');
-        
+        // Use query-string to parse the URL
+        const parsedUrl = queryString.parseUrl(url);
+        const authToken = parsedUrl.query.auth_token as string;
+
         if (authToken) {
           setLoading(true);
           await AsyncStorage.setItem('authToken', authToken);
@@ -88,11 +86,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
 
-    const sub = Linking.addEventListener('url', handleDeepLink);
+    const sub = Linking.addEventListener('url', handleLink);
 
     // Handle cold start deep link
-    Linking.getInitialURL().then(url => {
-      if (url) handleDeepLink({ url });
+    Linking.getInitialURL().then((url) => {
+      if (url) handleLink({ url });
     });
 
     return () => sub.remove();
@@ -107,12 +105,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const userData = response.data;
       setUser(userData);
       await AsyncStorage.setItem('user', JSON.stringify(userData));
-      return userData;
     } catch (error: any) {
       console.error('Error fetching user profile:', error);
 
       if (error.response?.status === 401) {
-        console.warn('Unauthorized. Clearing invalid token.');
         await AsyncStorage.multiRemove(['authToken', 'user']);
         setToken(null);
         setUser(null);
@@ -124,11 +120,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const login = () => {
-    const ssoUrl = SSO_SERVER_URL;
-    const clientId = CLIENT_ID;
-    const redirectUrl = REDIRECT_URL;
-
-    const loginUrl = `${ssoUrl}/login?token=${clientId}&redirect_url=${encodeURIComponent(redirectUrl)}`;
+    const loginUrl = `${SSO_SERVER_URL}/login?token=${CLIENT_ID}&redirect_url=${(REDIRECT_URL)}`;
     Linking.openURL(loginUrl);
   };
 
@@ -150,20 +142,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(true);
     try {
       const response = await axios.post(`${SSO_SERVER_URL}/auth/login`, { email, password });
+      const { token, user } = response.data;
 
-      const { token: authToken, user: userData } = response.data;
-
-      await AsyncStorage.setItem('authToken', authToken);
-      await AsyncStorage.setItem('user', JSON.stringify(userData));
-
-      setToken(authToken);
-      setUser(userData);
+      await AsyncStorage.setItem('authToken', token);
+      setToken(token);
+      setUser(user);
       setIsAuthenticated(true);
 
       return true;
     } catch (error) {
-      console.error('Sign in error:', error);
-      throw error;
+      console.error('Error during sign-in:', error);
+      return false;
     } finally {
       setLoading(false);
     }
@@ -190,7 +179,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return true;
     } catch (error) {
       console.error('Sign up error:', error);
-      throw error;
+      return false;
     } finally {
       setLoading(false);
     }
