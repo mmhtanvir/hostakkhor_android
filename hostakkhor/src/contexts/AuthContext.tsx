@@ -5,17 +5,18 @@ import { Linking } from 'react-native';
 import queryString from 'query-string';
 import { SSO_SERVER_URL, CLIENT_ID } from '@env'; // Ensure these environment variables are properly set
 
+// Define the shape of the authentication context
 interface AuthContextType {
   isAuthenticated: boolean;
   token: string | null;
   user: User | null;
   login: () => void;
   logout: () => Promise<void>;
-  signInWithEmail: (email: string, password: string) => Promise<boolean>;
-  signUpWithEmail: (email: string, password: string, fullName: string) => Promise<boolean>;
+  fetchUserProfile: (token: string) => Promise<void>;
   loading: boolean;
 }
 
+// Define the shape of the user object
 interface User {
   id: string;
   name?: string;
@@ -24,6 +25,7 @@ interface User {
   createdAt: string;
 }
 
+// Create the authentication context
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -68,7 +70,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const handleLink = async ({ url }: { url: string }) => {
       try {
-        // Use query-string to parse the URL
         const parsedUrl = queryString.parseUrl(url);
         const authToken = parsedUrl.query.auth_token as string;
 
@@ -96,8 +97,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => sub.remove();
   }, []);
 
+  // Fetch user profile based on the token
   const fetchUserProfile = async (token: string) => {
     try {
+      console.log('Fetching user profile with token:', token);
       const response = await axios.get(`${SSO_SERVER_URL}/api/user/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -106,9 +109,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(userData);
       await AsyncStorage.setItem('user', JSON.stringify(userData));
     } catch (error: any) {
-      console.error('Error fetching user profile:', error);
+      console.error('Error fetching user profile:', error.response?.data || error.message);
 
       if (error.response?.status === 401) {
+        // Clear invalid token and user data
         await AsyncStorage.multiRemove(['authToken', 'user']);
         setToken(null);
         setUser(null);
@@ -119,67 +123,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // Login method: redirect to SSO server
   const login = () => {
-    const loginUrl = `${SSO_SERVER_URL}/login?token=${CLIENT_ID}&redirect_url=${(REDIRECT_URL)}`;
+    const encodedRedirectUrl = encodeURIComponent(REDIRECT_URL);
+    const loginUrl = `${SSO_SERVER_URL}/login?client_id=${CLIENT_ID}&redirect_url=${encodedRedirectUrl}`;
+    console.log('Redirecting to login URL:', loginUrl);
     Linking.openURL(loginUrl);
   };
 
+  // Logout method: clear token and user data
   const logout = async () => {
     setLoading(true);
     try {
+      // Clear token and user data
       await AsyncStorage.multiRemove(['authToken', 'user']);
       setToken(null);
       setIsAuthenticated(false);
       setUser(null);
     } catch (error) {
       console.error('Logout error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const signInWithEmail = async (email: string, password: string) => {
-    setLoading(true);
-    try {
-      const response = await axios.post(`${SSO_SERVER_URL}/auth/login`, { email, password });
-      const { token, user } = response.data;
-
-      await AsyncStorage.setItem('authToken', token);
-      setToken(token);
-      setUser(user);
-      setIsAuthenticated(true);
-
-      return true;
-    } catch (error) {
-      console.error('Error during sign-in:', error);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const signUpWithEmail = async (email: string, password: string, fullName: string) => {
-    setLoading(true);
-    try {
-      const response = await axios.post(`${SSO_SERVER_URL}/auth/register`, {
-        email,
-        password,
-        name: fullName
-      });
-
-      const { token: authToken, user: userData } = response.data;
-
-      await AsyncStorage.setItem('authToken', authToken);
-      await AsyncStorage.setItem('user', JSON.stringify(userData));
-
-      setToken(authToken);
-      setUser(userData);
-      setIsAuthenticated(true);
-
-      return true;
-    } catch (error) {
-      console.error('Sign up error:', error);
-      return false;
     } finally {
       setLoading(false);
     }
@@ -193,8 +155,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         user,
         login,
         logout,
-        signInWithEmail,
-        signUpWithEmail,
+        fetchUserProfile, // Added fetchUserProfile here
         loading
       }}
     >

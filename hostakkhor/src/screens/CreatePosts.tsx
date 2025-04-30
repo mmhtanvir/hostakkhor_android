@@ -18,30 +18,27 @@ import { globalStyles } from '../styles/globalStyles';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 
 const CreatePost = () => {
-  const [text, setText] = useState('');
-  const [selectedOption, setSelectedOption] = useState('Personal Post');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [imageUri, setImageUri] = useState(null);
-  const [audioUri, setAudioUri] = useState(null);
+  const [state, setState] = useState({
+    text: '',
+    selectedOption: 'Personal Post',
+    showDropdown: false,
+    imageUri: null,
+    audioUri: null,
+  });
 
-  const postOptions = [
-    'Personal Post',
-    'Post to your page',
-  ];
+  const postOptions = ['Personal Post', 'Post to your page'];
 
-  const requestGalleryPermission = async () => {
+  const handleStateChange = (key, value) => {
+    setState((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const requestPermission = async (permission) => {
     if (Platform.OS === 'android') {
       try {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-          {
-            title: 'Gallery Permission',
-            message: 'App needs access to your gallery',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
-        );
+        const granted = await PermissionsAndroid.request(permission);
         return granted === PermissionsAndroid.RESULTS.GRANTED;
       } catch (err) {
         console.warn(err);
@@ -51,124 +48,58 @@ const CreatePost = () => {
     return true;
   };
 
-  const requestCameraPermission = async () => {
-    if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-          {
-            title: 'Camera Permission',
-            message: 'App needs access to your camera',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
-      } catch (err) {
-        console.warn(err);
-        return false;
-      }
-    }
-    return true;
-  };
+  const handleImageSelection = async (source) => {
+    const permission =
+      source === 'camera'
+        ? await requestPermission(PermissionsAndroid.PERMISSIONS.CAMERA)
+        : await requestPermission(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
 
-  const handleAddImage = async () => {
-    const galleryPermission = await requestGalleryPermission();
-    const cameraPermission = await requestCameraPermission();
-
-    if (!galleryPermission || !cameraPermission) {
-      Alert.alert('Permission required', 'Please allow access to camera and gallery');
+    if (!permission) {
+      Alert.alert('Permission Denied', 'Please allow the necessary permissions.');
       return;
     }
 
-    Alert.alert(
-      'Select Image Source',
-      'Choose an option',
-      [
-        {
-          text: 'Camera',
-          onPress: () => {
-            launchCamera(
-              {
-                mediaType: 'photo',
-                quality: 1,
-                saveToPhotos: true,
-              },
-              (response) => {
-                if (response.didCancel) {
-                  console.log('User cancelled camera');
-                } else if (response.errorCode) {
-                  Alert.alert('Camera Error', response.errorMessage);
-                } else if (response.assets && response.assets.length > 0) {
-                  const selectedImage = response.assets[0];
-                  setImageUri(selectedImage.uri);
-                }
-              }
-            );
-          },
-        },
-        {
-          text: 'Gallery',
-          onPress: () => {
-            launchImageLibrary(
-              {
-                mediaType: 'photo',
-                quality: 1,
-                selectionLimit: 1,
-              },
-              (response) => {
-                if (response.didCancel) {
-                  console.log('User cancelled image picker');
-                } else if (response.errorCode) {
-                  Alert.alert('Gallery Error', response.errorMessage);
-                } else if (response.assets && response.assets.length > 0) {
-                  const selectedImage = response.assets[0];
-                  setImageUri(selectedImage.uri);
-                }
-              }
-            );
-          },
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ],
-      { cancelable: true }
-    );
+    const options = {
+      mediaType: 'photo',
+      quality: 1,
+      saveToPhotos: source === 'camera',
+    };
+
+    const callback = (response) => {
+      if (response.didCancel) {
+        console.log('User cancelled');
+      } else if (response.errorCode) {
+        Alert.alert('Error', response.errorMessage);
+      } else if (response.assets && response.assets.length > 0) {
+        handleStateChange('imageUri', response.assets[0].uri);
+      }
+    };
+
+    source === 'camera' ? launchCamera(options, callback) : launchImageLibrary(options, callback);
   };
 
-  const removeImage = () => {
-    setImageUri(null);
-  };
-
-  const handleOptionSelect = (option) => {
-    setSelectedOption(option);
-    setShowDropdown(false);
-  };
-
-  const handleAddAudio = () => {
-    Alert.alert('Coming Soon', 'Audio upload feature will be added soon');
+  const removeMedia = (type) => {
+    handleStateChange(type, null);
   };
 
   const handlePostSubmit = () => {
+    const { text, selectedOption, imageUri, audioUri } = state;
+
     if (!text.trim()) {
       Alert.alert('Required', 'Please enter some text for your post');
       return;
     }
 
-    console.log('Post submitted:', {
-      text,
-      destination: selectedOption,
-      imageUri,
-      audioUri
-    });
+    console.log('Post submitted:', { text, destination: selectedOption, imageUri, audioUri });
 
     Alert.alert('Success', 'Post created successfully!');
-    setText('');
-    setImageUri(null);
-    setAudioUri(null);
+    setState({
+      text: '',
+      selectedOption: 'Personal Post',
+      showDropdown: false,
+      imageUri: null,
+      audioUri: null,
+    });
   };
 
   return (
@@ -178,13 +109,12 @@ const CreatePost = () => {
         <Text style={styles.title}>Create a Post</Text>
 
         <View style={styles.card}>
-          <Text style={styles.label}>Post Destination (Optional)</Text>
-
+          {/* Post Destination Dropdown */}
           <TouchableOpacity
             style={styles.dropdown}
-            onPress={() => setShowDropdown(true)}
+            onPress={() => handleStateChange('showDropdown', true)}
           >
-            <Text style={styles.dropdownText}>{selectedOption}</Text>
+            <Text style={styles.dropdownText}>{state.selectedOption}</Text>
             <Image
               source={{ uri: 'https://cdn-icons-png.flaticon.com/512/60/60995.png' }}
               style={styles.dropdownIcon}
@@ -192,55 +122,50 @@ const CreatePost = () => {
           </TouchableOpacity>
 
           <Modal
-            visible={showDropdown}
+            visible={state.showDropdown}
             transparent={true}
             animationType="fade"
-            onRequestClose={() => setShowDropdown(false)}
+            onRequestClose={() => handleStateChange('showDropdown', false)}
           >
-            <TouchableWithoutFeedback onPress={() => setShowDropdown(false)}>
+            <TouchableWithoutFeedback onPress={() => handleStateChange('showDropdown', false)}>
               <View style={styles.modalOverlay} />
             </TouchableWithoutFeedback>
-
             <View style={styles.dropdownOptions}>
               {postOptions.map((option) => (
                 <TouchableOpacity
                   key={option}
                   style={[
                     styles.optionItem,
-                    selectedOption === option && styles.selectedOption
+                    state.selectedOption === option && styles.selectedOption,
                   ]}
-                  onPress={() => handleOptionSelect(option)}
+                  onPress={() => {
+                    handleStateChange('selectedOption', option);
+                    handleStateChange('showDropdown', false);
+                  }}
                 >
                   <Text style={styles.optionText}>{option}</Text>
-                  {selectedOption === option && (
-                    <Image
-                      source={{ uri: 'https://cdn-icons-png.flaticon.com/512/845/845646.png' }}
-                      style={styles.selectedIcon}
-                    />
-                  )}
                 </TouchableOpacity>
               ))}
             </View>
           </Modal>
 
+          {/* Post Text Input */}
           <TextInput
             style={styles.input}
             placeholder="Share your thoughts..."
-            value={text}
-            onChangeText={setText}
+            value={state.text}
+            onChangeText={(text) => handleStateChange('text', text)}
             multiline
             placeholderTextColor="#888"
           />
 
-          {imageUri && (
+          {/* Image Preview */}
+          {state.imageUri && (
             <View style={styles.previewContainer}>
-              <Image
-                source={{ uri: imageUri }}
-                style={styles.previewImage}
-              />
+              <Image source={{ uri: state.imageUri }} style={styles.previewImage} />
               <TouchableOpacity
                 style={styles.removeImageButton}
-                onPress={removeImage}
+                onPress={() => removeMedia('imageUri')}
               >
                 <Image
                   source={{ uri: 'https://cdn-icons-png.flaticon.com/512/685/685655.png' }}
@@ -250,51 +175,27 @@ const CreatePost = () => {
             </View>
           )}
 
-          {audioUri && (
-            <View style={styles.audioPreview}>
-              <Image
-                source={{ uri: 'https://cdn-icons-png.flaticon.com/512/727/727269.png' }}
-                style={styles.audioIcon}
-              />
-              <Text style={styles.audioText}>Audio attached</Text>
-            </View>
-          )}
-
+          {/* Media Buttons */}
           <View style={styles.mediaRow}>
             <TouchableOpacity
               style={styles.mediaButton}
-              onPress={handleAddImage}
+              onPress={() => handleImageSelection('camera')}
             >
-              <Image
-                source={{ uri: 'https://cdn-icons-png.flaticon.com/512/149/149852.png' }}
-                style={styles.mediaIcon}
-              />
-              <Text style={styles.mediaButtonText}>Add Image</Text>
+              <Text style={styles.mediaButtonText}>Take Photo</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={styles.mediaButton}
-              onPress={handleAddAudio}
+              onPress={() => handleImageSelection('gallery')}
             >
-              <Image
-                source={{ uri: 'https://cdn-icons-png.flaticon.com/512/727/727269.png' }}
-                style={styles.mediaIcon}
-              />
-              <Text style={styles.mediaButtonText}>Add Audio</Text>
+              <Text style={styles.mediaButtonText}>Add from Gallery</Text>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={styles.postButton}
-            onPress={handlePostSubmit}
-          >
+          {/* Submit Button */}
+          <TouchableOpacity style={styles.postButton} onPress={handlePostSubmit}>
             <Text style={styles.postButtonText}>Post</Text>
           </TouchableOpacity>
         </View>
-
-        <Text style={styles.subheading}>Your Recent Posts</Text>
-        <Text style={styles.subtext}>View and manage your recent posts</Text>
-        <Text style={styles.emptyText}>No posts found for this filter.</Text>
       </ScrollView>
     </View>
   );
@@ -489,6 +390,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     padding: 20,
   },
-});
+});   
 
 export default CreatePost;
