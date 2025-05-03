@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, Image, ScrollView, Alert, ActivityIndicator
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  ScrollView,
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { globalStyles } from '../styles/globalStyles';
 import Icon from 'react-native-vector-icons/FontAwesome';
@@ -29,6 +36,13 @@ const SignInScreen = () => {
       return false;
     }
 
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return false;
+    }
+
     if (!isSignIn) {
       if (!formData.fullName) {
         Alert.alert('Error', 'Please provide your full name');
@@ -52,21 +66,51 @@ const SignInScreen = () => {
 
     try {
       if (isSignIn) {
+        // Debug logging
+        console.log('Attempting sign in with:', {
+          email: formData.email,
+          passwordLength: formData.password.length,
+          timestamp: new Date().toISOString()
+        });
+        
         const success = await signInWithEmail(formData.email, formData.password);
+        
         if (success) {
           navigation.navigate('Home');
+        } else {
+          Alert.alert(
+            'Error',
+            'Sign in failed. Please check your credentials and try again.'
+          );
         }
       } else {
-        const success = await signUpWithEmail(formData.email, formData.password, formData.fullName);
+        const success = await signUpWithEmail(
+          formData.email,
+          formData.password,
+          formData.fullName
+        );
         if (success) {
           navigation.navigate('Home');
         }
       }
     } catch (error: any) {
-      Alert.alert(
-        'Error',
-        error.response?.data?.message || 'Authentication failed. Please try again.'
-      );
+      console.error('Sign in error details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+
+      let errorMessage = 'Authentication failed. Please try again.';
+      
+      if (error.response?.status === 401) {
+        errorMessage = 'Invalid email or password. Please check your credentials.';
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data?.message || 'Invalid request. Please check your input.';
+      } else if (error.response?.status === 429) {
+        errorMessage = 'Too many attempts. Please try again later.';
+      }
+
+      Alert.alert('Error', errorMessage);
     }
   };
 

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
-import { v4 as uuidv4 } from 'uuid'; // Install `uuid` package for unique ID generation
+import uuid from 'react-native-uuid';
 
 // Types for configuration and responses
 interface QuarksConfig {
@@ -194,4 +194,8 @@ export type {
     QueryOptions,
     FuzzySearchItem,
     FuzzySearchQuery,
+<<<<<<< HEAD
 };
+=======
+};
+>>>>>>> 4339bee (successfull manual login/signup)

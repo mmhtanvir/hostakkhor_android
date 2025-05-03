@@ -39,8 +39,7 @@ const HomeScreen = () => {
   
       const skip = reset ? 0 : page * 10;
       const url = `${API_BASE_URL}/getsorted?keys=hostakkhor_posts_*&skip=${skip}&limit=1000`;
-  
-      console.log(`Fetching posts from: ${url}`); // Debugging
+
       const response = await fetch(url, {
         method: 'GET', // Explicit GET request
       });
@@ -50,12 +49,14 @@ const HomeScreen = () => {
       }
   
       const data = await response.json();
-      console.log('Fetched data:', data); // Debugging
   
       if (data.result && Array.isArray(data.result)) {
-        // Extract posts from the nested structure
+        // Extract posts from the nested structure and sort by created_at
         const newPosts = data.result.map((item: any) => item.value);
-  
+        newPosts.sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+
         setPosts((prev) => (reset ? newPosts : [...prev, ...newPosts]));
         setHasMore(newPosts.length === 10); // Check if there are more posts
         setPage((prev) => (reset ? 1 : prev + 1));
@@ -288,6 +289,7 @@ export default HomeScreen;
 // cd hostakkhor
 // npx react-native run-android
 // npx react-native start --reset-cache
+// npx react-native log-android
 // git add .
 // git commit -m "your message here"
 // git push

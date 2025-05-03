@@ -11,7 +11,7 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "^2.1.2",
+    "@react-native-async-storage/async-storage": "^1.21.0",
     "@react-native-google-signin/google-signin": "^13.2.0",
     "@react-navigation/native": "^6.1.18",
     "@react-navigation/native-stack": "^6.11.0",
@@ -29,12 +29,12 @@
     "react-native-gesture-handler": "^2.25.0",
     "react-native-image-picker": "^8.2.0",
     "react-native-keychain": "^10.0.0",
-    "react-native-linking": "^0.0.0",
     "react-native-reanimated": "^3.17.4",
     "react-native-safe-area-context": "^5.4.0",
     "react-native-screens": "^3.37.0",
     "react-native-svg": "^15.11.2",
     "react-native-svg-transformer": "^1.5.0",
+    "react-native-uuid": "^2.0.3",
     "react-native-vector-icons": "^10.2.0",
     "react-native-webview": "^13.13.5"
   },
