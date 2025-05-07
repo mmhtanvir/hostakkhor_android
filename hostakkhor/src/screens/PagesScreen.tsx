@@ -1,209 +1,222 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image } from 'react-native';
-import Icon from 'react-native-vector-icons/FontAwesome';
-import { SvgUri } from 'react-native-svg';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Image,
+  ScrollView,
+  Alert,
+  FlatList,
+} from 'react-native';
+import { launchImageLibrary } from 'react-native-image-picker';
 import { globalStyles } from '../styles/globalStyles';
-import Header from '../components/Header';
-import { useNavigation } from '@react-navigation/native';
 
-const PageDetailsScreen = () => {
-  const navigation = useNavigation();
+// Mock function for API calls - Replace with actual API logic
+const fetchRecentlyCreatedPages = async () => {
+  // Simulate fetching pages
+  return [
+    { id: '1', name: 'Sample Page 1', bio: 'Description 1', avatar: '' },
+    { id: '2', name: 'Sample Page 2', bio: 'Description 2', avatar: '' },
+  ];
+};
+
+const createPageAPI = async (pageName, bio, avatarUri) => {
+  // Replace with actual API logic
+  console.log('Creating page:', { pageName, bio, avatarUri });
+  return { success: true, id: 'new_page_id' };
+};
+
+const CreatePage = () => {
+  const [pageName, setPageName] = useState('');
+  const [bio, setBio] = useState('');
+  const [avatarUri, setAvatarUri] = useState('');
+  const [recentPages, setRecentPages] = useState([]);
+
+  const fetchPages = async () => {
+    const pages = await fetchRecentlyCreatedPages();
+    setRecentPages(pages);
+  };
+
+  const pickImage = async () => {
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      maxWidth: 1024,
+      maxHeight: 1024,
+      quality: 0.8,
+    });
+
+    if (result.assets && result.assets.length > 0) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  };
+
+  const createPage = async () => {
+    if (!pageName.trim()) {
+      Alert.alert('Validation Error', 'Page name is required.');
+      return;
+    }
+
+    const response = await createPageAPI(pageName, bio, avatarUri);
+    if (response.success) {
+      Alert.alert('Success', 'Page created successfully!');
+      fetchPages(); // Refresh recently created pages
+    } else {
+      Alert.alert('Error', 'Failed to create the page. Please try again.');
+    }
+  };
+
+  React.useEffect(() => {
+    fetchPages();
+  }, []);
 
   return (
     <View style={globalStyles.container}>
-      <Header />
       <ScrollView contentContainerStyle={styles.content}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Icon name="arrow-left" size={20} color="#000" />
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
-
-        {/* Profile Card */}
+        <Text style={styles.title}>Create a Page</Text>
         <View style={styles.card}>
-          <Image
-            source={{ uri: 'https://placehold.co/120x120.png' }}
-            style={styles.avatar}
-          />
-          <Text style={styles.name}>Mahamudul Hasan</Text>
-          <View style={styles.row}>
-            <Icon name="calendar" size={16} style={styles.icon} />
-            <Text style={styles.text}>Created 19 Apr 2025</Text>
-          </View>
-          <View style={styles.row}>
-            <Icon name="copy" size={16} style={styles.icon} />
-            <Text style={styles.text}>Copy Link</Text>
-          </View>
-          <View style={styles.row}>
-            <Icon name="share-alt" size={16} style={styles.icon} />
-            <Text style={styles.text}>Share Page</Text>
-          </View>
-          <View style={styles.row}>
-            <Icon name="pencil" size={16} style={styles.icon} />
-            <Text style={styles.text}>Edit Page</Text>
-          </View>
-          <TouchableOpacity style={styles.deleteRow}>
-            <Icon name="trash" size={16} color="#e53935" style={styles.icon} />
-            <Text style={styles.deleteText}>Delete Page</Text>
-          </TouchableOpacity>
-        </View>
+          <Text style={styles.sectionTitle}>Page Details</Text>
 
-        {/* About Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About</Text>
-          <Text style={styles.sectionText}>No description available.</Text>
-        </View>
-
-        {/* Posts Section */}
-        <View style={styles.section}>
-          <View style={styles.postHeader}>
-            <Text style={styles.sectionTitle}>Posts</Text>
-            <TouchableOpacity style={styles.createPostBtn}>
-              <Text style={styles.createPostText}>Create Post</Text>
+          <View style={styles.imagePickerContainer}>
+            <TouchableOpacity style={styles.imageCircle} onPress={pickImage}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+              ) : (
+                <Image
+                  source={{
+                    uri: 'https://cdn-icons-png.flaticon.com/512/685/685655.png',
+                  }}
+                  style={styles.onlycameraIcon}
+                />
+              )}
             </TouchableOpacity>
           </View>
 
           <TextInput
-            style={styles.searchInput}
-            placeholder="Search posts..."
-            placeholderTextColor="#999"
+            style={styles.input}
+            placeholder="Enter page name"
+            value={pageName}
+            onChangeText={setPageName}
+            placeholderTextColor="#888"
           />
 
-          <TouchableOpacity style={styles.allBtn}>
-            <Text style={styles.allBtnText}>All</Text>
-          </TouchableOpacity>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="Tell people about this page..."
+            value={bio}
+            onChangeText={setBio}
+            multiline
+            numberOfLines={4}
+            placeholderTextColor="#888"
+          />
 
-          <Text style={styles.noPostsText}>No posts found for this filter.</Text>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.cancelButton} onPress={() => Alert.alert('Action', 'Cancelled')}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.createButton} onPress={createPage}>
+              <Text style={styles.createText}>Create Page</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+
+        <Text style={styles.subheading}>Recently Created Pages</Text>
+        {recentPages.length ? (
+          <FlatList
+            data={recentPages}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={styles.pageItem}>
+                <Image
+                  source={{ uri: item.avatar || 'https://via.placeholder.com/50' }}
+                  style={styles.pageAvatar}
+                />
+                <View>
+                  <Text style={styles.pageName}>{item.name}</Text>
+                  <Text style={styles.pageBio}>{item.bio}</Text>
+                </View>
+              </View>
+            )}
+          />
+        ) : (
+          <Text style={styles.emptyText}>No pages found</Text>
+        )}
       </ScrollView>
     </View>
   );
 };
 
-export default PageDetailsScreen;
-
 const styles = StyleSheet.create({
-  content: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  backText: {
-    marginLeft: 6,
-    fontSize: 16,
-    fontWeight: '500',
-  },
+  content: { padding: 20 },
+  title: { fontSize: 20, fontWeight: 'bold', marginBottom: 20 },
   card: {
-    backgroundColor: '#fffdf7',
+    backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    elevation: 1,
+    padding: 20,
+    marginBottom: 30,
+    elevation: 2,
+  },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 20 },
+  imagePickerContainer: {
+    alignItems: 'center',
     marginBottom: 20,
+  },
+  imageCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#f1f1f1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarImage: { width: 90, height: 90, borderRadius: 45 },
+  onlycameraIcon: { width: 30, height: 30, tintColor: '#999' },
+  input: {
+    borderColor: '#ddd',
     borderWidth: 1,
-    borderColor: '#f4f0e6',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    marginBottom: 15,
+    color: '#000',
   },
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    alignSelf: 'center',
-    marginBottom: 12,
+  textArea: { height: 100, textAlignVertical: 'top' },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 10,
   },
-  name: {
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 12,
+  cancelButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginRight: 10,
+    backgroundColor: '#eee',
   },
-  row: {
+  createButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#9b5d18',
+  },
+  cancelText: { color: '#444' },
+  createText: { color: '#fff', fontWeight: 'bold' },
+  subheading: { fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
+  emptyText: { fontSize: 13, color: '#999' },
+  pageItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
-  },
-  deleteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  icon: {
-    marginRight: 10,
-    color: '#444',
-    width: 20,
-  },
-  text: {
-    fontSize: 15,
-    color: '#333',
-  },
-  deleteText: {
-    fontSize: 15,
-    color: '#e53935',
-    fontWeight: '500',
-  },
-  section: {
-    backgroundColor: '#fffdf7',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#f4f0e6',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  sectionText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  postHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  createPostBtn: {
-    backgroundColor: '#9c530a',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
+    backgroundColor: '#fff',
+    padding: 10,
     borderRadius: 8,
+    elevation: 1,
   },
-  createPostText: {
-    color: '#fffdf7',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  searchInput: {
-    backgroundColor: '#fafafa',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderColor: '#e0e0e0',
-    borderWidth: 1,
-    fontSize: 14,
-    marginTop: 12,
-  },
-  allBtn: {
-    backgroundColor: '#9c530a',
-    paddingVertical: 6,
-    paddingHorizontal: 20,
-    alignSelf: 'center',
-    borderRadius: 8,
-    marginTop: 12,
-    marginBottom: 16,
-  },
-  allBtnText: {
-    color: '#fffdf7',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  noPostsText: {
-    fontSize: 15,
-    color: '#888',
-    textAlign: 'center',
-    marginTop: 12,
-  },
+  pageAvatar: { width: 50, height: 50, borderRadius: 25, marginRight: 10 },
+  pageName: { fontSize: 16, fontWeight: 'bold' },
+  pageBio: { fontSize: 12, color: '#666' },
 });
+
+export default CreatePage;

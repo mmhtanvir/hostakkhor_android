@@ -1,32 +1,42 @@
-import React, { useState } from 'react';
-import { View, TouchableOpacity, StyleSheet, Image, Text } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, TouchableOpacity, StyleSheet, Image, Text, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SvgUri } from 'react-native-svg';
 import { Svg, Path } from 'react-native-svg';
 import { globalStyles } from '../styles/globalStyles';
+import { useAuth } from '../contexts/AuthContext';
+
+const DefaultProfileImage = () => (
+  <View style={[globalStyles.profileButton, { backgroundColor: '#e1e1e1', justifyContent: 'center', alignItems: 'center' }]}>
+    <Text style={{ fontSize: 16, color: '#888' }}>?</Text>
+  </View>
+);
 
 const Header = ({ onLogoPress, onProfilePress, showSignIn, showProfile }: any) => {
   const navigation = useNavigation();
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);   
+  const { user, logout, fetchUserDetails } = useAuth();
+  const [imageError, setImageError] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [userDetails, setUserDetails] = useState<any>(null);
 
-  const UserIcon = () => (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
-      <Path
-        d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-        stroke="#333"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"
-        stroke="#333"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
+  useEffect(() => {
+    const loadUserDetails = async () => {
+      if (user?.email) {
+        try {
+          const response = await fetchUserDetails(user.email);
+          if (response?.result?.[0]?.value) {
+            setUserDetails(response.result[0].value);
+            console.log('Loaded user details:', response.result[0].value);
+          }
+        } catch (error) {
+          console.error('Error loading user details:', error);
+        }
+      }
+    };
+
+    loadUserDetails();
+  }, [user]);
 
   const SignOutIcon = () => (
     <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
@@ -47,14 +57,81 @@ const Header = ({ onLogoPress, onProfilePress, showSignIn, showProfile }: any) =
     </Svg>
   );
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setShowDropdown(false);
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'SignIn' }],
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  const navigateToProfile = () => {
+    setShowDropdown(false);
+    navigation.navigate('Profile');
+  };
+
+  const renderProfileImage = (style, dropdownImage = false) => {
+    // Use userDetails.profileImageUrl instead of user.profileImageUrl
+    const profileUrl = userDetails?.profileImageUrl;
+    
+    if (profileUrl && !imageError) {
+      return (
+        <TouchableOpacity 
+          style={{ position: 'relative' }}
+          onPress={navigateToProfile}
+        >
+          <Image
+            source={{ 
+              uri: profileUrl,
+              cache: 'reload'
+            }}
+            style={[
+              style, 
+              { width: 40, height: 40, borderRadius: 20 }
+            ]}
+            onLoadStart={() => setImageLoading(true)}
+            onLoadEnd={() => setImageLoading(false)}
+            onError={(error) => {
+              console.log('Profile image failed to load:', profileUrl, error);
+              setImageError(true);
+              setImageLoading(false);
+            }}
+          />
+          {imageLoading && (
+            <View style={{ 
+              position: 'absolute', 
+              top: 0, left: 0, right: 0, bottom: 0, 
+              justifyContent: 'center', 
+              alignItems: 'center',
+              backgroundColor: 'rgba(240, 240, 240, 0.5)',
+              borderRadius: 20
+            }}>
+              <ActivityIndicator size="small" color="#888" />
+            </View>
+          )}
+        </TouchableOpacity>
+      );
+    }
+    return (
+      <TouchableOpacity onPress={navigateToProfile}>
+        <DefaultProfileImage />
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={globalStyles.header}>
       {/* Logo */}
       <TouchableOpacity
-                onPress={() => {
-                  setShowDropdown(false);
-                  navigation.navigate('Home');
-                }}>
+        onPress={() => {
+          setShowDropdown(false);
+          navigation.navigate('Home');
+        }}>
         <SvgUri
           width="40"
           height="40"
@@ -62,37 +139,49 @@ const Header = ({ onLogoPress, onProfilePress, showSignIn, showProfile }: any) =
         />
       </TouchableOpacity>
 
-      {/* Only show dropdown if showProfile is true */}
-      {showProfile && (
+      {/* Profile Section */}
+      {showProfile && (userDetails || user) && (
         <View style={{ position: 'relative' }}>
-          <TouchableOpacity onPress={() => setShowDropdown(!showDropdown)}>
-            <Image
-              source={{ uri: 'https://cdn-icons-png.flaticon.com/512/1144/1144760.png' }}
-              style={globalStyles.profileButton}
-            />
+          <TouchableOpacity 
+            onPress={() => setShowDropdown(!showDropdown)}
+            style={[
+              globalStyles.profileButtonContainer,
+              { flexDirection: 'row', alignItems: 'center', gap: 8 }
+            ]}
+          >
+            {/* Header Profile Button */}
+            {renderProfileImage(globalStyles.profileButton)}
+            {(userDetails?.name || user?.name) && (
+              <Text style={globalStyles.profileNameText}>
+                {userDetails?.name || user?.name}
+              </Text>
+            )}
           </TouchableOpacity>
 
           {showDropdown && (
-            <View style={globalStyles.dropdown}>
+            <View style={[globalStyles.dropdown, { right: 0, top: 50 }]}>
               <TouchableOpacity
-                onPress={() => {
-                  setShowDropdown(false);
-                  navigation.navigate('Profile');
-                }}
+                onPress={navigateToProfile}
                 style={globalStyles.dropdownRow}
               >
-                <UserIcon />
-                <Text style={globalStyles.dropdownItem}>Profile</Text>
+                {/* Dropdown Profile Image */}
+                {renderProfileImage(globalStyles.dropdownProfileImage, true)}
+                <View style={globalStyles.dropdownProfileInfo}>
+                  <Text style={globalStyles.dropdownProfileName}>
+                    {userDetails?.name || user?.name || 'User'}
+                  </Text>
+                  {(userDetails?.email || user?.email) && (
+                    <Text style={globalStyles.dropdownProfileEmail}>
+                      {userDetails?.email || user?.email}
+                    </Text>
+                  )}
+                </View>
               </TouchableOpacity>
 
-              {/* Divider */}
               <View style={globalStyles.divider} />
 
               <TouchableOpacity
-                onPress={() => {
-                  setShowDropdown(false);
-                  navigation.navigate('SignIn');
-                }}
+                onPress={handleLogout}
                 style={globalStyles.dropdownRow}
               >
                 <SignOutIcon />

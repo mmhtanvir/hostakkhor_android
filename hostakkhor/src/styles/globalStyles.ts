@@ -548,7 +548,7 @@ export const globalStyles = StyleSheet.create({
   },
   dropdown: {
     position: 'absolute',
-    top: 44,
+    top: 45,
     right: 0,
     backgroundColor: '#fff',
     borderRadius: 8,
@@ -556,7 +556,12 @@ export const globalStyles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16, // ⬅️ slightly more padding
     zIndex: 999,
-    minWidth: 120, // ⬅️ ensures enough width
+    padding: 8,
+    minWidth: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   dropdownItem: {
     paddingVertical: 8,
@@ -606,6 +611,9 @@ export const globalStyles = StyleSheet.create({
     marginTop: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.extraLightGray,
+    backgroundColor: '#fff',
+    marginBottom: 10,
+    position: 'relative',
   },
   tabButton: {
     paddingVertical: 10,
@@ -618,6 +626,7 @@ export const globalStyles = StyleSheet.create({
     fontFamily: fonts.medium,
     color: colors.gray,
     includeFontPadding: false,
+    fontWeight: '500',
   },
   activeTabButtonText: {
     color: colors.primary,
@@ -1199,6 +1208,49 @@ likeText: {
 },
 commentText: {
   fontSize: 14,
+},
+
+profileButtonContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  padding: 4,
+  borderRadius: 20,
+  backgroundColor: '#f5f5f5',
+},
+
+profileNameText: {
+  marginLeft: 8,
+  marginRight: 8,
+  fontSize: 14,
+  color: '#333',
+  fontWeight: '500',
+},
+
+dropdownProfileImage: {
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  marginRight: 12,
+},
+
+dropdownProfileInfo: {
+  flex: 1,
+},
+
+dropdownProfileName: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#333',
+  marginBottom: 2,
+},
+
+dropdownProfileEmail: {
+  fontSize: 12,
+  color: '#666',
+},
+
+activeTabButton: {
+  backgroundColor: 'transparent',
 },
 
 });

@@ -11,19 +11,25 @@ interface AuthContextType {
   user: User | null;
   login: () => void;
   logout: () => Promise<void>;
-  signInWithEmail: (email: string, password: string) => Promise<boolean>;
+  signInWithEmail: (Email: string, password: string) => Promise<boolean>;
   signUpWithEmail: (email: string, password: string, fullName: string) => Promise<boolean>;
   loading: boolean;
   fetchUserDetails: (email: string) => Promise<any>;
   fetchUserProfile: (token: string) => Promise<void>;
 }
 
-interface User {
-  id: string;
+interface IUser {
+  id?: string;
   name?: string;
   email: string;
-  profileImageUrl: string | null;
-  createdAt: string;
+  ssoProfileImageUrl?: string;
+  profileImageUrl?: string;
+  created_at?: number;
+  updated_at?: number;
+  path?: string;
+  bio?: string;
+  pinnedPostTheme?: 'default' | 'golden';
+  onboardingCompleted?: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -162,22 +168,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const signInWithEmail = async (email: string, password: string) => {
+  const signInWithEmail = async (Email: string, password: string) => {
     setLoading(true);
     try {
-      const loginUrl = `${SSO_SERVER_URL}/login?token=${CLIENT_ID}&redirect_url=${REDIRECT_URL}`;
-      const response = await axios.post(loginUrl, { email, password });
-
+      const requestData = {
+        email: Email,
+        password: password,
+        token: CLIENT_ID,
+        redirectUrl: REDIRECT_URL
+      };
+  
+      const url = `${SSO_SERVER_URL}/api/auth/login`;
+  
+      console.log('Sending login request to:', url);
+      console.log('Login request body:', requestData);
+  
+      const response = await axios.post(url, requestData);
+  
       const { token, user } = response.data;
-
+  
       await AsyncStorage.setItem('authToken', token);
       setToken(token);
       setUser(user);
       setIsAuthenticated(true);
-
-      // Fetch additional user details
+  
       await fetchUserDetails(user.email);
-
+  
       return true;
     } catch (error) {
       console.error('Error during sign-in:', error);
@@ -185,35 +201,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } finally {
       setLoading(false);
     }
-  };
+  };  
 
-  const signUpWithEmail = async (email: string, password: string, fullName: string) => {
-    setLoading(true);
+  const signUpWithEmail = async (email: string, password: string, fullName: string): Promise<boolean> => {
+    if (!fullName) {
+      console.error("Full name is required for signup");
+      return false;
+    }
+  
     try {
-      const response = await axios.post(`${SSO_SERVER_URL}/register?token=${CLIENT_ID}&redirect_url=${REDIRECT_URL}`, {
+      // Debug logging for request
+      console.log('Sending signup request to:', `${SSO_SERVER_URL}/api/auth/register`);
+      console.log('Signup request body:', { email, password, name: fullName, token, redirectUrl: REDIRECT_URL });
+  
+      const response = await axios.post(`${SSO_SERVER_URL}/api/auth/register`, {
         email,
         password,
         name: fullName,
+        token, // Token from app state or configuration
+        redirectUrl: REDIRECT_URL,
       });
-
-      const { token: authToken, user: userData } = response.data;
-
-      await AsyncStorage.setItem('authToken', authToken);
-      await AsyncStorage.setItem('user', JSON.stringify(userData));
-
-      setToken(authToken);
-      setUser(userData);
-      setIsAuthenticated(true);
-
-      // Fetch additional user details
-      await fetchUserDetails(userData.email);
-
-      return true;
+  
+      if (response.data.success) {
+        const { token, user } = response.data;
+  
+        // Save user and token in local storage
+        await AsyncStorage.setItem('authToken', token);
+        await AsyncStorage.setItem('user', JSON.stringify(user));
+  
+        // Update context state
+        setToken(token);
+        setUser(user);
+        setIsAuthenticated(true);
+  
+        return true;
+      } else {
+        console.error("Signup failed:", response.data.error);
+        return false;
+      }
     } catch (error) {
-      console.error('Sign up error:', error);
-      return false;
-    } finally {
-      setLoading(false);
+      console.error("Signup error details:", { message: error.message, response: error.response });
+      throw error; // Re-throw to handle in the calling function
     }
   };
 

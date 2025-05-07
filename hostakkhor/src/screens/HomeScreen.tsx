@@ -16,11 +16,13 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { IPost } from '../types/ipost'; 
 import { Svg, Path, Line, Polyline } from 'react-native-svg';
+import { useAuth } from '../contexts/AuthContext';
 
 const API_BASE_URL = 'https://proxy.hostakkhor.com/proxy';
 
 const HomeScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { user } = useAuth(); // Get user data from auth context
   const [posts, setPosts] = useState<IPost[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -34,14 +36,14 @@ const HomeScreen = () => {
       if (reset) {
         setPage(0);
         setLoading(true);
-        setPosts([]); // Clear posts on reset
+        setPosts([]);
       }
   
       const skip = reset ? 0 : page * 10;
       const url = `${API_BASE_URL}/getsorted?keys=hostakkhor_posts_*&skip=${skip}&limit=1000`;
 
       const response = await fetch(url, {
-        method: 'GET', // Explicit GET request
+        method: 'GET',
       });
   
       if (!response.ok) {
@@ -51,18 +53,17 @@ const HomeScreen = () => {
       const data = await response.json();
   
       if (data.result && Array.isArray(data.result)) {
-        // Extract posts from the nested structure and sort by created_at
         const newPosts = data.result.map((item: any) => item.value);
         newPosts.sort(
           (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
 
         setPosts((prev) => (reset ? newPosts : [...prev, ...newPosts]));
-        setHasMore(newPosts.length === 10); // Check if there are more posts
+        setHasMore(newPosts.length === 10);
         setPage((prev) => (reset ? 1 : prev + 1));
       } else {
         console.error('Unexpected response structure:', data);
-        setHasMore(false); // No further fetching
+        setHasMore(false);
       }
     } catch (error) {
       console.error('Error fetching posts:', error);
@@ -133,6 +134,7 @@ const HomeScreen = () => {
         onProfilePress={() => navigation.navigate('Profile')}
         showSignIn={false}
         showProfile={true}
+        profileImageUrl={user?.profileImageUrl} // Pass user's profile image to Header
       />
 
       <ScrollView 
@@ -150,6 +152,7 @@ const HomeScreen = () => {
         }
         scrollEventThrottle={400}
       >
+        {/* ... rest of the HomeScreen content remains the same ... */}
         <View style={globalStyles.archiveHeader}>
           <PenIcon />
           <Text style={globalStyles.archiveHeaderText}>HANDWRITING ARCHIVE</Text>
@@ -286,10 +289,12 @@ export default HomeScreen;
 
 
 
+
 // cd hostakkhor
 // npx react-native run-android
-// npx react-native start --reset-cache
 // npx react-native log-android
+// npx react-native start --reset-cache
 // git add .
 // git commit -m "your message here"
 // git push
+// npx react-native doctor
