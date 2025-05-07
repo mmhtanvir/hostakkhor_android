@@ -1,4 +1,3 @@
-
 export interface IPost {
   id?: number;
   path?: string;

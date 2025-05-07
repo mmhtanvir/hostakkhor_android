@@ -1,5 +1,6 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
+import { View, ActivityIndicator } from 'react-native';
 import WelcomeScreen from '../screens/WelcomeScreen';
 import SignInScreen from '../screens/SignInScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -7,16 +8,15 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import CreatePost from '../screens/CreatePosts';
 import CreatePage from '../screens/CreatePages';
-import PostDetailsScreen from '../screens/PostScreen'; // Import the PostDetail screen
+import PostDetailsScreen from '../screens/PostScreen';
 import { RootStackParamList } from '../types/navigation';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../contexts/AuthContext';
-import { ActivityIndicator, View } from 'react-native';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
 const AppNavigator = () => {
-  const { loading } = useAuth(); // removed isAuthenticated
+  const { loading, user } = useAuth();
 
   if (loading) {
     return (
@@ -28,7 +28,7 @@ const AppNavigator = () => {
 
   return (
     <Stack.Navigator
-      initialRouteName="Home" // Always start with Home
+      initialRouteName={user ? 'Home' : 'Welcome'}
       screenOptions={{
         headerShown: true,
         headerStyle: {
@@ -82,7 +82,7 @@ const AppNavigator = () => {
       />
       <Stack.Screen 
         name="PostDetail" 
-        component={PostDetailsScreen} // Register the PostDetail screen here
+        component={PostDetailsScreen}
         options={{ title: 'Post Details' }} 
       />
     </Stack.Navigator>

@@ -12,8 +12,9 @@ const WelcomeScreen = () => {
   return (
     <View style={globalStyles.container}>
       <Header
-        onLogoPress={() => navigation.navigate('Home')}
         showSignIn={false}
+        showLogo={true}  // Still show the logo but without navigation
+        onLogoPress={() => {}} // Empty function to disable navigation
       />
 
       <ScrollView
@@ -32,8 +33,6 @@ const WelcomeScreen = () => {
           <Text style={globalStyles.secondaryButtonText}>Sign In</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      
     </View>
   );
 };

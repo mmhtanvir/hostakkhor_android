@@ -6,9 +6,9 @@ export type RootStackParamList = {
   Home: undefined;
   Profile: undefined;
   EditProfile: undefined;
-  CreatePost: undefined;     
-  CreatePage: undefined;     
-  PostDetail: { postId: number }; 
+  CreatePost: undefined;
+  CreatePage: undefined;
+  PostDetail: { postId: string };
 };
 
 
