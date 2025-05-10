@@ -1,4 +1,4 @@
-import { createClient } from "./quarks";
+import { createClient } from "./api";
 
 export const getQuarksInstance = () => {
     const baseUrl = PROXY_SERVER_URL;

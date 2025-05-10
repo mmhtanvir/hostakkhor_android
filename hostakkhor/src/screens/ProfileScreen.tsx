@@ -369,7 +369,9 @@ const ProfileScreen = () => {
                 <View style={globalStyles.pinEmptyOverlay}>
                   <Icon name="thumb-tack" size={24} color="#888" style={{ marginBottom: 8 }} />
                   <Text style={globalStyles.pinEmptyText}>No pinned post available</Text>
-                  <TouchableOpacity style={globalStyles.createPinButton}>
+                  <TouchableOpacity style={globalStyles.createPinButton}
+                    onPress={() => navigation.navigate('CreatePost')}
+                  >
                     <Icon name="thumb-tack" size={12} color="#000" style={{ marginRight: 6 }} />
                     <Text style={globalStyles.createPinText}>Create a post to pin</Text>
                   </TouchableOpacity>

@@ -8,10 +8,10 @@ import { SSO_SERVER_URL, CLIENT_ID } from '@env';
 interface AuthContextType {
   isAuthenticated: boolean;
   token: string | null;
-  user: User | null;
+  user: IUser | null;
   login: () => void;
   logout: () => Promise<void>;
-  signInWithEmail: (Email: string, password: string) => Promise<boolean>;
+  signInWithEmail: (email: string, password: string) => Promise<boolean>;
   signUpWithEmail: (email: string, password: string, fullName: string) => Promise<boolean>;
   loading: boolean;
   fetchUserDetails: (email: string) => Promise<any>;
@@ -19,25 +19,33 @@ interface AuthContextType {
 }
 
 interface IUser {
-  id?: string;
-  name?: string;
+  id: string;           // Internal app ID
+  ssoId: string;        // SSO ID
+  name: string;
   email: string;
   ssoProfileImageUrl?: string;
   profileImageUrl?: string;
-  created_at?: number;
-  updated_at?: number;
-  path?: string;
-  bio?: string;
-  pinnedPostTheme?: 'default' | 'golden';
-  onboardingCompleted?: boolean;
+  created_at: number;
+  updated_at: number;
+  path: string;
+  bio: string;
+  pinnedPostTheme: 'default' | 'golden';
+  onboardingCompleted: boolean;
+  role: string;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const generateUniqueId = () => {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substr(2, 6).toUpperCase();
+  return `${timestamp}-${random}`;
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<IUser | null>(null);
   const [loading, setLoading] = useState(false);
 
   const REDIRECT_URL = "hostakkhor://auth";
@@ -55,7 +63,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setToken(storedToken);
 
           if (storedUser) {
-            setUser(JSON.parse(storedUser));
+            const parsedUser = JSON.parse(storedUser);
+            setUser(parsedUser);
             setIsAuthenticated(true);
           } else {
             await fetchUserProfile(storedToken);
@@ -91,14 +100,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
 
-    const sub = Linking.addEventListener('url', handleLink);
+    const subscription = Linking.addEventListener('url', handleLink);
 
     Linking.getInitialURL().then((url) => {
       if (url) handleLink({ url });
     });
 
     return () => {
-      sub.remove(); // Ensure cleanup
+      subscription.remove();
     };
   }, []);
 
@@ -119,36 +128,68 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error('Token is missing. Cannot fetch user profile.');
       throw new Error('Token is missing');
     }
-  
+
     try {
+      // Get SSO profile
       const response = await axios.get(`${SSO_SERVER_URL}/api/user/profile`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
-  
-      console.log('User profile response:', response.data);
-  
-      const userData = response.data;
-      setUser(userData);
-      await AsyncStorage.setItem('user', JSON.stringify(userData));
-  
-      // Fetch additional user details
-      await fetchUserDetails(userData.email);
+
+      console.log('SSO User profile response:', response.data);
+      const ssoUserData = response.data;
+      
+      // Fetch internal user details
+      const internalUserDetails = await fetchUserDetails(ssoUserData.email);
+      console.log('Internal user details:', internalUserDetails);
+      const internalUser = internalUserDetails?.result?.[0]?.value;
+
+      // Generate or use existing internal ID
+      const internalId = internalUser?.id || generateUniqueId();
+      const userPath = `hostakkhor_users_${ssoUserData.email.replace('@', '-').replace('.', '-')}`;
+      
+      // Combine both profiles, ensuring we keep both IDs and all necessary fields
+      const combinedUserData: IUser = {
+        id: internalId,
+        ssoId: ssoUserData.id,
+        email: ssoUserData.email,
+        name: ssoUserData.name || internalUser?.name || 'Anonymous',
+        profileImageUrl: internalUser?.profileImageUrl || ssoUserData.profileImageUrl || '',
+        ssoProfileImageUrl: ssoUserData.profileImageUrl || '',
+        created_at: internalUser?.created_at || Date.now(),
+        updated_at: Date.now(),
+        path: userPath,
+        bio: internalUser?.bio || "My world",
+        pinnedPostTheme: internalUser?.pinnedPostTheme || "default",
+        onboardingCompleted: internalUser?.onboardingCompleted || false,
+        role: 'user'
+      };
+
+      console.log('Combined user data:', combinedUserData);
+
+      // Save the combined user data
+      setUser(combinedUserData);
+      await AsyncStorage.setItem('user', JSON.stringify(combinedUserData));
+
+      // Update or create internal user record
+      const key = userPath;
+      await fetch('https://proxy.hostakkhor.com/proxy/putjson', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          key,
+          value: combinedUserData
+        }),
+      });
+
+      setIsAuthenticated(true);
     } catch (error: any) {
       console.error('Error fetching user profile:', error);
-  
-      // Handle 401 error
-      if (error.response?.status === 401) {
-        console.warn('Token is invalid or expired. Logging out the user.');
-        await AsyncStorage.multiRemove(['authToken', 'user']);
-        setToken(null);
-        setUser(null);
-        setIsAuthenticated(false);
-      }
-  
       throw error;
     }
   };
-  
+
   const login = () => {
     const loginUrl = `${SSO_SERVER_URL}/login?token=${CLIENT_ID}&redirect_url=${REDIRECT_URL}`;
     Linking.openURL(loginUrl);
@@ -168,32 +209,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const signInWithEmail = async (Email: string, password: string) => {
+  const signInWithEmail = async (email: string, password: string) => {
     setLoading(true);
     try {
       const requestData = {
-        email: Email,
-        password: password,
+        email,
+        password,
         token: CLIENT_ID,
-        redirectUrl: REDIRECT_URL
+        redirectUrl: REDIRECT_URL,
       };
-  
+
       const url = `${SSO_SERVER_URL}/api/auth/login`;
-  
-      console.log('Sending login request to:', url);
-      console.log('Login request body:', requestData);
-  
       const response = await axios.post(url, requestData);
-  
-      const { token, user } = response.data;
-  
+
+      const { token, user: ssoUser } = response.data;
+
       await AsyncStorage.setItem('authToken', token);
       setToken(token);
-      setUser(user);
-      setIsAuthenticated(true);
-  
-      await fetchUserDetails(user.email);
-  
+      await fetchUserProfile(token);
+
       return true;
     } catch (error) {
       console.error('Error during sign-in:', error);
@@ -201,47 +235,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } finally {
       setLoading(false);
     }
-  };  
+  };
 
   const signUpWithEmail = async (email: string, password: string, fullName: string): Promise<boolean> => {
     if (!fullName) {
       console.error("Full name is required for signup");
       return false;
     }
-  
+
     try {
-      // Debug logging for request
-      console.log('Sending signup request to:', `${SSO_SERVER_URL}/api/auth/register`);
-      console.log('Signup request body:', { email, password, name: fullName, token, redirectUrl: REDIRECT_URL });
-  
       const response = await axios.post(`${SSO_SERVER_URL}/api/auth/register`, {
         email,
         password,
         name: fullName,
-        token, // Token from app state or configuration
+        token: CLIENT_ID,
         redirectUrl: REDIRECT_URL,
       });
-  
+
       if (response.data.success) {
-        const { token, user } = response.data;
-  
-        // Save user and token in local storage
+        const { token } = response.data;
         await AsyncStorage.setItem('authToken', token);
-        await AsyncStorage.setItem('user', JSON.stringify(user));
-  
-        // Update context state
         setToken(token);
-        setUser(user);
-        setIsAuthenticated(true);
-  
+        await fetchUserProfile(token);
         return true;
       } else {
         console.error("Signup failed:", response.data.error);
         return false;
       }
-    } catch (error) {
-      console.error("Signup error details:", { message: error.message, response: error.response });
-      throw error; // Re-throw to handle in the calling function
+    } catch (error: any) {
+      console.error("Signup error details:", {
+        message: error.message,
+        response: error.response,
+      });
+      throw error;
     }
   };
 
