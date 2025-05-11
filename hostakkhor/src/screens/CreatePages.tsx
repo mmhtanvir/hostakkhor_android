@@ -9,43 +9,156 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Platform,
+  Linking,
+  PermissionsAndroid,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
+import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { globalStyles } from '../styles/globalStyles';
 
+const FILE_UPLOAD_URL = 'https://files.hostakkhor.com/upload';
+
+interface ImageFile {
+  uri?: string;
+  type?: string;
+  fileName?: string;
+}
+
 const CreatePage = () => {
+  const navigation = useNavigation();
+  const { user } = useAuth();
+  
   const [pageName, setPageName] = useState('');
   const [bio, setBio] = useState('');
   const [loading, setLoading] = useState(false);
   const [avatar, setAvatar] = useState('');
+  const [imageFile, setImageFile] = useState<ImageFile | null>(null);
+
+  const generateTimestamp = () => {
+    const now = new Date();
+    return now.getTime();
+  };
 
   const generateUniqueId = () => {
-    // Generate a timestamp-based ID
-    const timestamp = new Date().getTime();
-    const random = Math.floor(Math.random() * 1000);
-    return `${timestamp}${random}`;
+    const timestamp = generateTimestamp();
+    const random = Math.random().toString(36).substr(2, 6).toUpperCase();
+    return `${timestamp}-${random}`;
+  };
+
+  const requestPermissions = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const permissions = [
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+        ];
+
+        const results = await PermissionsAndroid.requestMultiple(permissions);
+        return Object.values(results).every(
+          result => result === PermissionsAndroid.RESULTS.GRANTED
+        );
+      } catch (error) {
+        console.error('Permission request failed:', error);
+        return false;
+      }
+    }
+    return true;
   };
 
   const handleImagePick = async () => {
-    try {
-      const result = await launchImageLibrary({
-        mediaType: 'photo',
-        quality: 0.8,
-      });
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) {
+      Alert.alert(
+        'Permission Required',
+        'Please grant camera and media permissions',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() }
+        ]
+      );
+      return;
+    }
 
-      if (result.assets && result.assets[0]) {
-        // Here you would typically first upload the image to your server
-        // and get back a URL. For now, we'll just store the local URI
-        setAvatar(result.assets[0].uri || '');
+    const options = {
+      mediaType: 'photo' as const,
+      quality: 0.8,
+      maxWidth: 1200,
+      maxHeight: 1200,
+      includeBase64: true,
+    };
+
+    try {
+      const response = await launchImageLibrary(options);
+      console.log('Image picker response:', response);
+
+      if (response.didCancel) {
+        console.log('User cancelled image picker');
+      } else if (response.errorCode) {
+        throw new Error(response.errorMessage);
+      } else if (response.assets?.[0]) {
+        const asset = response.assets[0];
+        setImageFile({
+          uri: asset.uri,
+          type: asset.type,
+          fileName: asset.fileName,
+        });
+        setAvatar(asset.uri || '');
       }
     } catch (error) {
-      console.error('Image picker error:', error);
-      Alert.alert('Error', 'Failed to pick image');
+      console.error('Image selection error:', error);
+      Alert.alert('Error', 'Failed to select image. Please try again.');
+    }
+  };
+
+  const uploadFile = async (uri: string): Promise<string> => {
+    try {
+      console.log('Starting file upload:', { uri });
+    
+      const formData = new FormData();
+      const timestamp = generateTimestamp();
+      const fileName = `${timestamp}.jpg`;
+    
+      const fileData = {
+        uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+        type: 'image/jpeg',
+        name: fileName,
+      };
+    
+      formData.append('file', fileData as any);
+    
+      const response = await fetch(FILE_UPLOAD_URL, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+    
+      if (!response.ok) {
+        throw new Error(`Upload failed with status ${response.status}`);
+      }
+    
+      const result = await response.json();
+      if (result.filename) {
+        return `https://files.hostakkhor.com/files/${result.filename}`;
+      }
+    
+      throw new Error('No filename in upload response');
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw error;
     }
   };
 
   const validateForm = () => {
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to create a page');
+      return false;
+    }
     if (!pageName.trim()) {
       Alert.alert('Error', 'Page name is required');
       return false;
@@ -57,77 +170,81 @@ const CreatePage = () => {
     return true;
   };
 
+  const handleCancel = () => {
+    setPageName('');
+    setBio('');
+    setAvatar('');
+    setImageFile(null);
+  };
+
   const createPage = async () => {
     if (!validateForm()) return;
-  
+
     try {
       setLoading(true);
+      
+      let uploadedAvatarUrl = '';
+      if (imageFile?.uri) {
+        try {
+          uploadedAvatarUrl = await uploadFile(imageFile.uri);
+        } catch (error) {
+          console.error('Image upload error:', error);
+          Alert.alert('Error', 'Failed to upload image');
+          return;
+        }
+      }
+
       const pageId = generateUniqueId();
-      const userId = 'mmhtanvir';
-      const currentTimestamp = new Date().getTime();
+      const currentTimestamp = generateTimestamp();
       
       const pageData = {
         key: `hostakkhor_pages_${pageId}`,
         value: {
           id: pageId,
           name: pageName.trim(),
-          authorId: `${userId}-${pageId}-xQ2t8a-8hn1mT`,
-          avatar: avatar,
+          authorId: user.id,
+          avatar: uploadedAvatarUrl || 'https://cdn-icons-png.flaticon.com/512/685/685655.png',
           bio: bio.trim(),
           created_at: currentTimestamp,
           updated_at: currentTimestamp,
-          members: [`${userId}-${pageId}-xQ2t8a-8hn1mT`],
+          members: [user.id],
           path: `hostakkhor_pages_${pageId}`
         }
       };
-  
-      // Log the request headers and body
-      const headers = {
-        'Content-Type': 'application/json',
-      };
-      
-      console.log('Request Headers:', headers);
-      console.log('Request Body:', JSON.stringify(pageData, null, 2));
-  
+
       const response = await fetch('https://proxy.hostakkhor.com/proxy/putjson', {
         method: 'POST',
-        headers: headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(pageData)
       });
-  
-      // Log the response headers
-      const responseHeaders = {};
-      response.headers.forEach((value, key) => {
-        responseHeaders[key] = value;
-      });
-      console.log('Response Headers:', responseHeaders);
-  
+
       if (!response.ok) {
-        throw new Error('Failed to create page');
+        throw new Error(`Failed to create page: ${response.statusText}`);
       }
-  
-      // Reset form and show success message
+
       setPageName('');
       setBio('');
       setAvatar('');
-      Alert.alert('Success', 'Page created successfully!');
+      setImageFile(null);
+      Alert.alert('Success', 'Page created successfully!', [
+        {
+          text: 'OK',
+          onPress: () => navigation.navigate('Pages' as never)
+        }
+      ]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to create page. Please try again.');
       console.error('Create page error:', error);
+      Alert.alert('Error', 'Failed to create page. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCancel = () => {
-    setPageName('');
-    setBio('');
-    setAvatar('');
-  };
-
   return (
     <View style={globalStyles.container}>
-      <Header showProfile={true} />
+      <Header showProfile={true} profileImageUrl={user?.profileImageUrl} />
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Create a Page</Text>
         <View style={styles.card}>
@@ -199,10 +316,6 @@ const CreatePage = () => {
             </TouchableOpacity>
           </View>
         </View>
-
-        <Text style={styles.subheading}>Recently Created Pages</Text>
-        <Text style={styles.subtext}>View and manage your recently created pages</Text>
-        <Text style={styles.emptyText}>No pages found</Text>
       </ScrollView>
     </View>
   );
@@ -313,20 +426,6 @@ const styles = StyleSheet.create({
   createText: {
     color: '#fff',
     fontWeight: 'bold',
-  },
-  subheading: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  subtext: {
-    fontSize: 13,
-    color: '#555',
-    marginBottom: 12,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: '#999',
   },
 });
 

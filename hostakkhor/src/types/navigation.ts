@@ -4,8 +4,9 @@ export type RootStackParamList = {
   Welcome: undefined;
   SignIn: undefined;
   Home: undefined;
-  Profile: undefined;
-  EditProfile: undefined;
+  Profile: { userId: string };
+  EditProfile: { userId: string };
+  pages: { pageId: string }
   CreatePost: undefined;
   CreatePage: undefined;
   PostDetail: { postId: string };

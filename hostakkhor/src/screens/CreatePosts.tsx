@@ -76,6 +76,17 @@ const CreatePost = () => {
     };
   }, []);
 
+  const generateTimestamp = () => {
+    const now = new Date();
+    return now.getTime();
+  };
+
+  const generateUniqueId = () => {
+    const timestamp = generateTimestamp();
+    const random = Math.random().toString(36).substr(2, 6).toUpperCase();
+    return `${timestamp}-${random}`;
+  };
+
   const requestPermissions = async () => {
     if (Platform.OS === 'android') {
       try {
@@ -149,13 +160,122 @@ const CreatePost = () => {
     }
   };
 
+  const startRecording = async () => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) {
+      Alert.alert(
+        'Permission Required',
+        'Please grant audio recording permissions',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() }
+        ]
+      );
+      return;
+    }
+
+    try {
+      const timestamp = generateTimestamp();
+      const path = Platform.select({
+        ios: `recording_${timestamp}.m4a`,
+        android: `${timestamp}.m4a`,
+      });
+
+      const result = await audioRecorderPlayer.startRecorder(
+        path,
+        {
+          AudioEncoderAndroid: AudioEncoderAndroidType.AAC,
+          AudioSourceAndroid: AudioSourceAndroidType.MIC,
+          AVEncoderAudioQualityKeyIOS: AVEncoderAudioQualityIOSType.high,
+          AVNumberOfChannelsKeyIOS: 2,
+          AVFormatIDKeyIOS: AVEncodingOption.aac,
+        }
+      );
+
+      audioRecorderPlayer.addRecordBackListener((e) => {
+        setRecordingTime(audioRecorderPlayer.mmssss(Math.floor(e.currentPosition)));
+      });
+
+      setIsRecording(true);
+      console.log('Recording started:', result);
+    } catch (error) {
+      console.error('Recording error:', error);
+      Alert.alert('Error', 'Failed to start recording. Please try again.');
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!isRecording) return;
+
+    try {
+      const result = await audioRecorderPlayer.stopRecorder();
+      audioRecorderPlayer.removeRecordBackListener();
+      setIsRecording(false);
+      setState(prev => ({ ...prev, audioUri: result }));
+      console.log('Recording stopped at:', result);
+    } catch (error) {
+      console.error('Stop recording error:', error);
+      Alert.alert('Error', 'Failed to stop recording.');
+    }
+  };
+
+  const startPlaying = async () => {
+    if (!state.audioUri) return;
+
+    try {
+      console.log('Starting playback from:', state.audioUri);
+      const result = await audioRecorderPlayer.startPlayer(state.audioUri);
+      
+      audioRecorderPlayer.addPlayBackListener((e) => {
+        if (e.currentPosition === e.duration) {
+          stopPlaying();
+        } else {
+          setPlayTime(audioRecorderPlayer.mmssss(Math.floor(e.currentPosition)));
+        }
+      });
+      
+      setIsPlaying(true);
+      console.log('Playback started:', result);
+    } catch (error) {
+      console.error('Playback error:', error);
+      Alert.alert('Error', 'Failed to play recording.');
+    }
+  };
+
+  const stopPlaying = async () => {
+    if (!isPlaying) return;
+
+    try {
+      await audioRecorderPlayer.stopPlayer();
+      audioRecorderPlayer.removePlayBackListener();
+      setIsPlaying(false);
+      setPlayTime('00:00');
+    } catch (error) {
+      console.error('Stop playing error:', error);
+    }
+  };
+
+  const removeAudio = () => {
+    setState(prev => ({ ...prev, audioUri: null }));
+    setRecordingTime('00:00');
+    setPlayTime('00:00');
+  };
+
+  const removeImage = () => {
+    setState(prev => ({
+      ...prev,
+      imageUri: null,
+      imagePreviewUrl: null,
+    }));
+  };
+
   const uploadFile = async (uri: string, type: 'image' | 'audio'): Promise<string> => {
     try {
       console.log('Starting file upload:', { type, uri });
     
       const formData = new FormData();
       const fileExtension = type === 'image' ? 'jpg' : 'm4a';
-      const timestamp = Date.now();
+      const timestamp = generateTimestamp();
       const fileName = `${timestamp}.${fileExtension}`;
     
       const fileData = {
@@ -199,103 +319,6 @@ const CreatePost = () => {
     }
   };
 
-  const startRecording = async () => {
-    const hasPermission = await requestPermissions();
-    if (!hasPermission) {
-      Alert.alert(
-        'Permission Required',
-        'Please grant audio recording permissions',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => Linking.openSettings() }
-        ]
-      );
-      return;
-    }
-
-    try {
-      const audioPath = `${Date.now()}.m4a`;
-      const result = await audioRecorderPlayer.startRecorder(
-        audioPath,
-        {
-          AudioEncoderAndroid: AudioEncoderAndroidType.AAC,
-          AudioSourceAndroid: AudioSourceAndroidType.MIC,
-          AVEncoderAudioQualityKeyIOS: AVEncoderAudioQualityIOSType.high,
-          AVNumberOfChannelsKeyIOS: 2,
-          AVFormatIDKeyIOS: AVEncodingOption.aac,
-        }
-      );
-
-      audioRecorderPlayer.addRecordBackListener((e) => {
-        setRecordingTime(audioRecorderPlayer.mmssss(Math.floor(e.currentPosition)));
-      });
-
-      setIsRecording(true);
-      console.log('Recording started:', result);
-    } catch (error) {
-      console.error('Recording error:', error);
-      Alert.alert('Error', 'Failed to start recording. Please try again.');
-    }
-  };
-
-  const stopRecording = async () => {
-    if (!isRecording) return;
-
-    try {
-      const result = await audioRecorderPlayer.stopRecorder();
-      audioRecorderPlayer.removeRecordBackListener();
-      setIsRecording(false);
-      setState(prev => ({ ...prev, audioUri: result }));
-    } catch (error) {
-      console.error('Stop recording error:', error);
-    }
-  };
-
-  const startPlaying = async () => {
-    if (!state.audioUri) return;
-
-    try {
-      await audioRecorderPlayer.startPlayer(state.audioUri);
-      audioRecorderPlayer.addPlayBackListener((e) => {
-        setPlayTime(audioRecorderPlayer.mmssss(Math.floor(e.currentPosition)));
-        if (e.currentPosition === e.duration) {
-          stopPlaying();
-        }
-      });
-      setIsPlaying(true);
-    } catch (error) {
-      console.error('Playback error:', error);
-      Alert.alert('Error', 'Failed to play recording. Please try again.');
-    }
-  };
-
-  const stopPlaying = async () => {
-    if (!isPlaying) return;
-
-    try {
-      await audioRecorderPlayer.stopPlayer();
-      audioRecorderPlayer.removePlayBackListener();
-      setIsPlaying(false);
-      setPlayTime('00:00');
-    } catch (error) {
-      console.error('Stop playing error:', error);
-    }
-  };
-
-  const removeAudio = () => {
-    setState(prev => ({ ...prev, audioUri: null }));
-    setRecordingTime('00:00');
-    setPlayTime('00:00');
-  };
-
-  const removeImage = () => {
-    setState(prev => ({
-      ...prev,
-      imageUri: null,
-      imagePreviewUrl: null,
-    }));
-  };
-
   const handlePostSubmit = async () => {
     if (!user?.id) {
       Alert.alert('Error', 'Please login to create a post');
@@ -311,8 +334,8 @@ const CreatePost = () => {
     Keyboard.dismiss();
 
     try {
-      const postId = `${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-      const timestamp = Date.now();
+      const timestamp = generateTimestamp();
+      const postId = generateUniqueId();
       const key = `hostakkhor_posts_${postId}`;
 
       let uploadedImageUrl: string | undefined;
@@ -382,6 +405,8 @@ const CreatePost = () => {
         }
       }
 
+      const placeholderImage = '../src/assets/audio-placeholder.svg'; 
+
       const post = {
         id: postId,
         path: key,
@@ -395,7 +420,7 @@ const CreatePost = () => {
           role: user.role || 'user',
         },
         content: state.text,
-        images: uploadedImageUrl ? [uploadedImageUrl] : [],
+        images: uploadedImageUrl ? [uploadedImageUrl] : state.audioUri ? [placeholderImage] : [], 
         audioFiles: uploadedAudioUrl ? [uploadedAudioUrl] : [],
         videos: [],
         category: 'General',
@@ -439,7 +464,7 @@ const CreatePost = () => {
   return (
     <KeyboardAvoidingView 
       style={globalStyles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'android' ? 'padding' : undefined}
     >
       <Header showProfile={true} />
       <ScrollView 

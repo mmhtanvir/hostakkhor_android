@@ -294,6 +294,7 @@ export default HomeScreen;
 // npx react-native run-android
 // npx react-native log-android
 // npx react-native start --reset-cache
+// git status
 // git add .
 // git commit -m "your message here"
 // git push

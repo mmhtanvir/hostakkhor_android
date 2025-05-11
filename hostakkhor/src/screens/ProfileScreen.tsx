@@ -12,7 +12,9 @@ import {
   PanResponder,
   ScrollView,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  StyleSheet,
+  FlatList
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { globalStyles, colors } from '../styles/globalStyles';
@@ -44,6 +46,12 @@ const ProfileScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [profileImageError, setProfileImageError] = useState(false);
   const [pinnedImageError, setPinnedImageError] = useState(false);
+  const [userPosts, setUserPosts] = useState<any[]>([]);
+  const [userPages, setUserPages] = useState<any[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [pagesLoading, setPagesLoading] = useState(false);
+  const [searchPostsQuery, setSearchPostsQuery] = useState('');
+  const [searchPagesQuery, setSearchPagesQuery] = useState('');
 
   const translateX = useRef(new Animated.Value(0)).current;
   const underlineTranslateX = useRef(new Animated.Value(0)).current;
@@ -68,30 +76,98 @@ const ProfileScreen = () => {
     }
   };
 
+  const getCurrentDateTime = () => {
+    const now = new Date();
+    return now.toISOString().slice(0, 19).replace('T', ' ');
+  };
+  const fetchUserPosts = async () => {
+    if (!user?.id) {
+      console.log('No user ID available');
+      return;
+    }
+    
+    try {
+      setPostsLoading(true);
+      console.log('Fetching posts for user ID:', user.id);
+      
+      const response = await fetch(`https://proxy.hostakkhor.com/proxy/getsorted?keys=hostakkhor_posts_*&skip=0&limit=1000`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.result && Array.isArray(data.result)) {
+        const posts = data.result
+          .map((item: any) => item.value)
+          .filter((post: any) => {
+            console.log('Post author ID:', post.authorId, 'User ID:', user.id);
+            return post.authorId === user.id;
+          })
+          .sort((a: any, b: any) => b.created_at - a.created_at);
+        
+        console.log('Filtered posts:', posts);
+        setUserPosts(posts);
+      } else {
+        console.error('Unexpected response structure:', data);
+        setUserPosts([]);
+      }
+    } catch (error) {
+      console.error('Error fetching user posts:', error);
+      setUserPosts([]);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
+  const fetchUserPages = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setPagesLoading(true);
+      const response = await fetch(`https://proxy.hostakkhor.com/proxy/getsorted?keys=hostakkhor_pages_*&skip=0&limit=1000`);
+      
+      if (!response.ok) throw new Error('Failed to fetch pages');
+      
+      const data = await response.json();
+      if (data.result && Array.isArray(data.result)) {
+        const pages = data.result
+          .map((item: any) => item.value)
+          .filter((page: any) => page.authorId === user.id)
+          .sort((a: any, b: any) => b.created_at - a.created_at);
+        setUserPages(pages);
+      }
+    } catch (error) {
+      console.error('Error fetching user pages:', error);
+    } finally {
+      setPagesLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadUserData();
+    fetchUserPosts();
+    fetchUserPages();
   }, [user]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       loadUserData();
+      fetchUserPosts();
+      fetchUserPages();
     });
     return unsubscribe;
   }, [navigation]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadUserData();
+    await Promise.all([loadUserData(), fetchUserPosts(), fetchUserPages()]);
   };
 
-  const getCurrentDateTime = () => {
-    const now = new Date();
-    return now.toISOString().slice(0, 19).replace('T', ' ');
-  };
-
-  const formatDate = (timestamp) => {
+  const formatDate = (timestamp: number) => {
     if (!timestamp) return 'Unknown date';
-    const date = new Date(Number(timestamp));
+    const date = new Date(timestamp);
     return date.toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -102,29 +178,31 @@ const ProfileScreen = () => {
     });
   };
 
-  const switchTab = (tab) => {
+  const switchTab = (tab: string) => {
     if (tab !== activeTab) {
       setActiveTab(tab);
       Animated.parallel([
         Animated.spring(translateX, {
           toValue: tab === 'Posts' ? 0 : -screenWidth,
           useNativeDriver: true,
-          friction: 10,
-          tension: 50,
-          restSpeedThreshold: 10,
-          restDisplacementThreshold: 10
         }),
         Animated.spring(underlineTranslateX, {
           toValue: tab === 'Posts' ? 0 : screenWidth / 2,
           useNativeDriver: true,
-          friction: 10,
-          tension: 50,
-          restSpeedThreshold: 10,
-          restDisplacementThreshold: 10
         }),
       ]).start();
     }
   };
+
+  const filteredPosts = userPosts.filter(post => 
+    (post.content?.toLowerCase().includes(searchPostsQuery.toLowerCase()) ||
+    (post.category?.toLowerCase().includes(searchPostsQuery.toLowerCase()))
+  ));
+
+  const filteredPages = userPages.filter(page =>
+    (page.name?.toLowerCase().includes(searchPagesQuery.toLowerCase()) ||
+    (page.bio?.toLowerCase().includes(searchPagesQuery.toLowerCase())))
+  );
 
   const panResponder = useRef(
     PanResponder.create({
@@ -139,16 +217,8 @@ const ProfileScreen = () => {
         if (newPosition < -screenWidth) newPosition = -screenWidth;
         translateX.setValue(newPosition);
 
-        // Update the tab indicator position
         const progress = Math.abs(newPosition) / screenWidth;
         underlineTranslateX.setValue(screenWidth * progress / 2);
-
-        // Update active tab based on swipe position
-        if (progress > 0.5 && activeTab === 'Posts') {
-          setActiveTab('Pages');
-        } else if (progress < 0.5 && activeTab === 'Pages') {
-          setActiveTab('Posts');
-        }
       },
       onPanResponderRelease: (_, gestureState) => {
         const { dx, vx } = gestureState;
@@ -168,9 +238,6 @@ const ProfileScreen = () => {
           switchTab(activeTab);
         }
       },
-      onPanResponderTerminate: () => {
-        switchTab(activeTab);
-      },
     })
   ).current;
 
@@ -178,15 +245,9 @@ const ProfileScreen = () => {
     if (userDetails?.profileImageUrl && !profileImageError) {
       return (
         <Image 
-          source={{ 
-            uri: userDetails.profileImageUrl,
-            cache: 'reload'
-          }} 
+          source={{ uri: userDetails.profileImageUrl }} 
           style={[globalStyles.profileImageLarge, { width: 80, height: 80, borderRadius: 40 }]}
-          onError={() => {
-            console.log('Profile image failed to load:', userDetails.profileImageUrl);
-            setProfileImageError(true);
-          }}
+          onError={() => setProfileImageError(true)}
         />
       );
     }
@@ -197,20 +258,62 @@ const ProfileScreen = () => {
     if (userDetails?.profileImageUrl && !pinnedImageError) {
       return (
         <Image 
-          source={{ 
-            uri: userDetails.profileImageUrl,
-            cache: 'reload'
-          }} 
+          source={{ uri: userDetails.profileImageUrl }}
           style={[globalStyles.pinnedProfileImageLarge, { width: 60, height: 60, borderRadius: 30 }]}
-          onError={() => {
-            console.log('Pinned profile image failed to load:', userDetails.profileImageUrl);
-            setPinnedImageError(true);
-          }}
+          onError={() => setPinnedImageError(true)}
         />
       );
     }
     return <DefaultProfileImage size="small" />;
   };
+
+  const renderPostItem = ({ item }: { item: any }) => (
+    <TouchableOpacity
+      style={styles.postCard}
+      onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+    >
+      {item.images?.[0] ? (
+        <Image
+          source={{ uri: item.images[0] }}
+          style={styles.postImage}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={[styles.postImage, { backgroundColor: '#f5f5f5', justifyContent: 'center', alignItems: 'center' }]}>
+          <Text style={{ color: '#888' }}>No Image</Text>
+        </View>
+      )}
+      <View style={styles.postContent}>
+        <Text style={styles.postText} numberOfLines={2}>
+          {item.content || 'No content available'}
+        </Text>
+        <Text style={styles.postDate}>
+          {formatDate(item.created_at)}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderPageItem = ({ item }: { item: any }) => (
+    <TouchableOpacity
+      style={styles.pageCard}
+      onPress={() => navigation.navigate('pagesScreen', { pageId: item.id })}
+    >
+      <Image
+        source={{ uri: item.avatar || 'https://cdn-icons-png.flaticon.com/512/685/685655.png' }}
+        style={styles.pageAvatar}
+      />
+      <View style={styles.pageContent}>
+        <Text style={styles.pageName}>{item.name}</Text>
+        <Text style={styles.pageBio} numberOfLines={2}>
+          {item.bio || 'No bio available'}
+        </Text>
+        <Text style={styles.pageDate}>
+          Created {formatDate(item.created_at)}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
 
   if (loading && !refreshing) {
     return (
@@ -311,6 +414,7 @@ const ProfileScreen = () => {
             transform: [{ translateX }],
           }}
         >
+          {/* Posts Tab */}
           <View style={{ width: screenWidth }}>
             <ScrollView 
               style={{ flex: 1 }}
@@ -333,6 +437,8 @@ const ProfileScreen = () => {
                   </TouchableOpacity>
                 </View>
               </View>
+
+
 
               <ImageBackground
                 source={
@@ -383,23 +489,43 @@ const ProfileScreen = () => {
                   <Icon name="image" size={14} color="#000" />
                   <Text style={globalStyles.sectionTitle}>User Posts</Text>
                 </View>
+                
                 <View style={globalStyles.searchContainer}>
                   <Icon name="search" size={14} color="#888" />
                   <TextInput
                     placeholder="Search posts..."
                     placeholderTextColor="#888"
                     style={globalStyles.searchInput}
+                    value={searchPostsQuery}
+                    onChangeText={setSearchPostsQuery}
                   />
                 </View>
-                <View style={globalStyles.filterContainer}>
-                  <TouchableOpacity style={globalStyles.filterButton}>
-                    <Text style={globalStyles.filterButtonText}>All</Text>
-                  </TouchableOpacity>
-                </View>
+
+                {postsLoading ? (
+                  <ActivityIndicator size="small" color="#000" style={{ marginTop: 20 }} />
+                ) : filteredPosts.length > 0 ? (
+                  <FlatList
+                    data={filteredPosts}
+                    renderItem={renderPostItem}
+                    keyExtractor={(item) => item.id}
+                    scrollEnabled={false}
+                    contentContainerStyle={{ paddingBottom: 20 }}
+                    ListEmptyComponent={
+                      <Text style={styles.emptyStateText}>
+                        {searchPostsQuery ? 'No posts match your search' : 'No posts available'}
+                      </Text>
+                    }
+                  />
+                ) : (
+                  <Text style={styles.emptyStateText}>
+                    {searchPostsQuery ? 'No posts match your search' : 'No posts available'}
+                  </Text>
+                )}
               </View>
             </ScrollView>
           </View>
 
+          {/* Pages Tab */}
           <View style={{ width: screenWidth }}>
             <ScrollView 
               style={{ flex: 1 }}
@@ -412,24 +538,39 @@ const ProfileScreen = () => {
                   <Icon name="book" size={14} color="#000" />
                   <Text style={globalStyles.sectionTitle}>User Pages</Text>
                 </View>
+                
                 <View style={globalStyles.searchContainer}>
                   <Icon name="search" size={14} color="#888" />
                   <TextInput
                     placeholder="Search pages..."
                     placeholderTextColor="#888"
                     style={globalStyles.searchInput}
+                    value={searchPagesQuery}
+                    onChangeText={setSearchPagesQuery}
                   />
                 </View>
-                <View style={globalStyles.filterContainer}>
-                  <TouchableOpacity style={globalStyles.filterButton}>
-                    <Text style={globalStyles.filterButtonText}>All</Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={globalStyles.emptyStateText}>No pages found</Text>
+
+                {pagesLoading ? (
+                  <ActivityIndicator size="small" color="#000" style={{ marginTop: 20 }} />
+                ) : filteredPages.length > 0 ? (
+                  <FlatList
+                    data={filteredPages}
+                    renderItem={renderPageItem}
+                    keyExtractor={(item) => item.id}
+                    scrollEnabled={false}
+                    contentContainerStyle={{ paddingBottom: 20 }}
+                  />
+                ) : (
+                  <Text style={styles.emptyStateText}>
+                    {searchPagesQuery ? 'No pages match your search' : 'No pages available'}
+                  </Text>
+                )}
               </View>
             </ScrollView>
           </View>
         </Animated.View>
+
+
 
         <Modal
           visible={themeModalVisible}
@@ -489,5 +630,77 @@ const ProfileScreen = () => {
     </ScrollView>
   );
 };
+
+const styles = StyleSheet.create({
+  postCard: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    marginBottom: 12,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  postImage: {
+    width: '100%',
+    height: 200,
+  },
+  postContent: {
+    padding: 12,
+  },
+  postText: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 4,
+  },
+  postDate: {
+    fontSize: 12,
+    color: '#888',
+  },
+  pageCard: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  pageAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  pageContent: {
+    flex: 1,
+  },
+  pageName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  pageBio: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  pageDate: {
+    fontSize: 12,
+    color: '#888',
+  },
+  emptyStateText: {
+    textAlign: 'center',
+    color: '#888',
+    marginTop: 20,
+    fontSize: 14,
+  },
+});
 
 export default ProfileScreen;
