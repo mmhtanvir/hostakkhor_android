@@ -22,7 +22,7 @@ const SignInScreen = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    fullName: '',
+    name: '',
     confirmPassword: ''
   });
 
@@ -44,7 +44,7 @@ const SignInScreen = () => {
     }
 
     if (!isSignIn) {
-      if (!formData.fullName) {
+      if (!formData.name) {
         Alert.alert('Error', 'Please provide your full name');
         return false;
       }
@@ -87,7 +87,7 @@ const SignInScreen = () => {
         const success = await signUpWithEmail(
           formData.email,
           formData.password,
-          formData.fullName
+          formData.name
         );
         if (success) {
           navigation.navigate('Home');
@@ -169,8 +169,8 @@ const SignInScreen = () => {
             <TextInput
               placeholder="Full Name"
               style={globalStyles.inputWithIcon}
-              value={formData.fullName}
-              onChangeText={(text) => handleInputChange('fullName', text)}
+              value={formData.name}
+              onChangeText={(text) => handleInputChange('name', text)}
               editable={!loading}
             />
           </View>

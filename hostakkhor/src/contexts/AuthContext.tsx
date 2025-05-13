@@ -12,7 +12,7 @@ interface AuthContextType {
   login: () => void;
   logout: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<boolean>;
-  signUpWithEmail: (email: string, password: string, fullName: string) => Promise<boolean>;
+  signUpWithEmail: (email: string, password: string, name: string) => Promise<boolean>;
   loading: boolean;
   fetchUserDetails: (email: string) => Promise<any>;
   fetchUserProfile: (token: string) => Promise<void>;
@@ -237,39 +237,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const signUpWithEmail = async (email: string, password: string, fullName: string): Promise<boolean> => {
-    if (!fullName) {
-      console.error("Full name is required for signup");
-      return false;
+const signUpWithEmail = async (email: string, password: string, name: string): Promise<boolean> => {
+  console.log('Starting signup process...', { email, name });
+  
+  try {
+    const response = await axios.post(`${SSO_SERVER_URL}/api/auth/register`, {
+      email,
+      password,
+      name,
+      token: CLIENT_ID,
+      redirectUrl: REDIRECT_URL,
+    });
+
+    console.log('Signup response status:', response.status);
+    console.log('Signup response data:', JSON.stringify(response.data, null, 2));
+
+    if (response.data.token) {
+      console.log('Token received, proceeding with user profile fetch...');
+      const { token } = response.data;
+      await AsyncStorage.setItem('authToken', token);
+      setToken(token);
+      await fetchUserProfile(token);
+      console.log('Signup process completed successfully');
+      return true;
     }
 
-    try {
-      const response = await axios.post(`${SSO_SERVER_URL}/api/auth/register`, {
-        email,
-        password,
-        name: fullName,
-        token: CLIENT_ID,
-        redirectUrl: REDIRECT_URL,
-      });
-
-      if (response.data.success) {
-        const { token } = response.data;
-        await AsyncStorage.setItem('authToken', token);
-        setToken(token);
-        await fetchUserProfile(token);
-        return true;
-      } else {
-        console.error("Signup failed:", response.data.error);
-        return false;
-      }
-    } catch (error: any) {
-      console.error("Signup error details:", {
-        message: error.message,
-        response: error.response,
-      });
-      throw error;
-    }
-  };
+    console.error('No token in response');
+    return false;
+  } catch (error: any) {
+    console.error('Signup error:', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data,
+      headers: error.response?.headers
+    });
+    throw error;
+  }
+};
 
   return (
     <AuthContext.Provider

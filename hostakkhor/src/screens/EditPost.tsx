@@ -54,17 +54,27 @@ const EditPostScreen = () => {
     getPostDetails();
   }, [postId]);
 
-  const uploadFile = async (uri: string): Promise<string> => {
+
+
+  const uploadFile = async (uri: string, type: 'image' | 'audio'): Promise<string> => {
     try {
+      console.log('Starting file upload:', { type, uri });
+    
       const formData = new FormData();
+      const fileExtension = type === 'image' ? 'jpg' : 'm4a';
+      const timestamp = generateTimestamp();
+      const fileName = `${timestamp}.${fileExtension}`;
+    
       const fileData = {
-        uri,
-        type: 'image/jpeg',
-        name: `image_${Date.now()}.jpg`,
+        uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+        type: type === 'image' ? 'image/jpeg' : 'audio/m4a',
+        name: fileName,
       };
-
+    
       formData.append('file', fileData as any);
-
+    
+      console.log('Uploading file:', formData);
+    
       const response = await fetch(FILE_UPLOAD_URL, {
         method: 'POST',
         body: formData,
@@ -73,15 +83,25 @@ const EditPostScreen = () => {
           'Content-Type': 'multipart/form-data',
         },
       });
-
+    
+      console.log('Upload response:', response);
+    
       if (!response.ok) {
         throw new Error(`Upload failed with status ${response.status}`);
       }
-
+    
       const result = await response.json();
-      return `https://files.hostakkhor.com/files/${result.filename}`;
+      console.log('Upload result:', result);
+    
+      if (result.filename) {
+        const fileUrl = `https://files.hostakkhor.com/files/${result.filename}`;
+        console.log('Generated file URL:', fileUrl);
+        return fileUrl;
+      }
+    
+      throw new Error('No filename in upload response');
     } catch (error) {
-      console.error('Error uploading file:', error);
+      console.error(`Error uploading ${type}:`, error);
       throw error;
     }
   };

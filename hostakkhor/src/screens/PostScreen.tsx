@@ -1,20 +1,47 @@
 import React, { useEffect, useState } from 'react';
-import {View,Text,StyleSheet,Image,TouchableOpacity,ScrollView,ActivityIndicator,Alert,} from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { globalStyles } from '../styles/globalStyles';
 import Header from '../components/Header';
-import { fetchPostById } from '../api/api'; 
+import { fetchPostById } from '../api/api';
 import { useAuth } from '../contexts/AuthContext';
+import Video from 'react-native-video';
+
+interface PostAuthor {
+  id: string;
+  name: string;
+  avatar?: string;
+}
+
+interface Post {
+  id: string;
+  content: string;
+  created_at: string;
+  author: PostAuthor;
+  images?: string[];
+  audio?: string;
+}
 
 const PostDetailsScreen = () => {
   const navigation = useNavigation();
   const { user } = useAuth();
   const route = useRoute();
-  const { postId } = route.params as { postId: string }; // Post ID passed through navigation
+  const { postId } = route.params as { postId: string };
 
-  const [post, setPost] = useState<any>(null);
+  const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [playing, setPlaying] = useState(false); // Audio player state
+  const [progress, setProgress] = useState(0); // Audio progress state
 
   useEffect(() => {
     const getPostDetails = async () => {
@@ -32,41 +59,44 @@ const PostDetailsScreen = () => {
     getPostDetails();
   }, [postId]);
 
-  console.log('Post Details:', post);
-
   const handleDeletePost = async () => {
-    // Confirm deletion
-    Alert.alert(
-      'Delete Post',
-      'Are you sure you want to delete this post?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              const response = await fetch(
-                `https://proxy.hostakkhor.com/proxy/remove?key=hostakkhor_posts_${postId}`,
-                { method: 'GET' }
-              );
-              if (response.ok) {
-                Alert.alert('Success', 'The post has been deleted.');
-                navigation.goBack(); // Navigate back to the previous screen
-              } else {
-                Alert.alert('Error', 'Failed to delete the post. Please try again.');
-              }
-            } catch (error) {
-              console.error('Error deleting post:', error);
-              Alert.alert('Error', 'An unexpected error occurred. Please try again.');
-            } finally {
-              setLoading(false);
+    Alert.alert('Delete Post', 'Are you sure you want to delete this post?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setLoading(true);
+            const response = await fetch(
+              `https://proxy.hostakkhor.com/proxy/remove?key=hostakkhor_posts_${postId}`,
+              { method: 'GET' }
+            );
+            if (response.ok) {
+              Alert.alert('Success', 'The post has been deleted.');
+              navigation.goBack();
+            } else {
+              Alert.alert('Error', 'Failed to delete the post. Please try again.');
             }
-          },
+          } catch (error) {
+            console.error('Error deleting post:', error);
+            Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+          } finally {
+            setLoading(false);
+          }
         },
-      ]
-    );
+      },
+    ]);
+  };
+
+  const handlePlayPause = () => {
+    setPlaying(!playing);
+  };
+
+  const handleAudioProgress = (data: any) => {
+    if (data.seekableDuration > 0) {
+      setProgress(data.currentTime / data.seekableDuration);
+    }
   };
 
   if (loading) {
@@ -92,22 +122,14 @@ const PostDetailsScreen = () => {
   return (
     <View style={globalStyles.container}>
       <Header />
-
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Back Button */}
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-        >
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Icon name="arrow-left" size={18} color="#000" />
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
 
-        {/* Post Card */}
         <View style={styles.postCard}>
-          {/* Top Row: Avatar, Name, Date, Share */}
+          {/* Header */}
           <View style={styles.postHeader}>
             <Image
               source={{ uri: post.author.avatar || 'https://placehold.co/100x100.png' }}
@@ -131,40 +153,65 @@ const PostDetailsScreen = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Post Image */}
-          {post.images?.[0] ? (
-            <Image
-              source={{ uri: post.images[0] }}
-              style={styles.postImage}
-              resizeMode="contain"
-            />
+          {/* Media Display */}
+          {post.images?.length > 0 ? (
+            <ScrollView horizontal style={styles.imageScroll} showsHorizontalScrollIndicator={false}>
+              {post.images.map((imgUrl: string, index: number) => (
+                <Image
+                  key={index}
+                  source={{ uri: imgUrl }}
+                  style={styles.postImage}
+                  resizeMode="contain"
+                />
+              ))}
+            </ScrollView>
+          ) : post.audio ? (
+            <View style={styles.audioContainer}>
+              <Text style={styles.audioLabel}>Audio Post</Text>
+              <View style={styles.audioControls}>
+                <TouchableOpacity 
+                  style={styles.playButton}
+                  onPress={handlePlayPause}
+                >
+                  <Icon name={playing ? 'pause' : 'play'} size={16} color="#fff" />
+                </TouchableOpacity>
+                <Video
+                  source={{ uri: post.audio }}
+                  audioOnly
+                  controls={false}
+                  paused={!playing}
+                  style={styles.audioPlayer}
+                  onProgress={handleAudioProgress}
+                  onEnd={() => {
+                    setPlaying(false);
+                    setProgress(0);
+                  }}
+                />
+                <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+                </View>
+              </View>
+            </View>
           ) : (
             <View style={styles.imagePlaceholder}>
-              <Text style={styles.imagePlaceholderText}>No Image Available</Text>
+              <Text style={styles.imagePlaceholderText}>No Media Available</Text>
             </View>
           )}
 
-          {/* Post Content */}
+          {/* Content */}
           <Text style={styles.postContent}>{post.content || 'No content available.'}</Text>
 
-          {/* Buttons (Visible only if user is the author) */}
+          {/* Buttons for Author */}
           {user?.id === post.author.id && (
             <View style={styles.actionButtons}>
               <TouchableOpacity
                 style={styles.editButton}
                 onPress={() => navigation.navigate('PostEdit', { postId })}
-                accessibilityLabel="Edit Post"
-                accessibilityRole="button"
               >
                 <Icon name="edit" size={18} color="#fff" />
                 <Text style={styles.editButtonText}>Edit Post</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={handleDeletePost}
-                accessibilityLabel="Delete Post"
-                accessibilityRole="button"
-              >
+              <TouchableOpacity style={styles.deleteButton} onPress={handleDeletePost}>
                 <Icon name="trash" size={18} color="#fff" />
                 <Text style={styles.deleteButtonText}>Delete Post</Text>
               </TouchableOpacity>
@@ -175,8 +222,6 @@ const PostDetailsScreen = () => {
     </View>
   );
 };
-
-export default PostDetailsScreen;
 
 const styles = StyleSheet.create({
   content: {
@@ -234,12 +279,15 @@ const styles = StyleSheet.create({
   shareBtn: {
     padding: 6,
   },
+  imageScroll: {
+    marginTop: 8,
+  },
   postImage: {
-    width: '100%',
+    width: 300,
     height: 300,
     borderRadius: 8,
+    marginRight: 12,
     backgroundColor: '#eee',
-    marginTop: 8,
   },
   imagePlaceholder: {
     width: '100%',
@@ -253,6 +301,44 @@ const styles = StyleSheet.create({
   imagePlaceholderText: {
     color: '#888',
     fontSize: 16,
+  },
+  audioContainer: {
+    marginTop: 12,
+    width: '100%',
+  },
+  audioLabel: {
+    fontSize: 16,
+    marginBottom: 8,
+    color: '#444',
+  },
+  audioControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  playButton: {
+    backgroundColor: '#5bc0de',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  audioPlayer: {
+    width: 0,
+    height: 0,
+  },
+  progressBarContainer: {
+    flex: 1,
+    height: 4,
+    backgroundColor: '#ddd',
+    borderRadius: 2,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#5bc0de',
+    borderRadius: 2,
   },
   postContent: {
     marginTop: 16,
@@ -308,3 +394,5 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
+export default PostDetailsScreen;
