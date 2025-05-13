@@ -156,8 +156,6 @@ const EditPostScreen = () => {
   };
 
   const handleAddImage = () => {
-    // In a real app, this would open an image picker
-    Alert.alert('Add Image', 'Image picker would open here');
   };
 
   if (loading) {

@@ -43,6 +43,10 @@ interface PostState {
   imageUri: string | null;
   audioUri: string | null;
   imagePreviewUrl: string | null;
+  selectedPage: string | null;
+  showPageDropdown: boolean;
+  pages: any[];
+  pagesLoading: boolean;
 }
 
 const CreatePost = () => {
@@ -61,11 +65,16 @@ const CreatePost = () => {
     imageUri: null,
     audioUri: null,
     imagePreviewUrl: null,
+    selectedPage: null,
+    showPageDropdown: false,
+    pages: [],
+    pagesLoading: false,
   });
 
   const postOptions = ['public', 'private'];
 
   useEffect(() => {
+    fetchUserPages();
     return () => {
       if (isRecording) {
         stopRecording();
@@ -75,6 +84,31 @@ const CreatePost = () => {
       }
     };
   }, []);
+
+  const fetchUserPages = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setState(prev => ({ ...prev, pagesLoading: true }));
+      const response = await fetch(`https://proxy.hostakkhor.com/proxy/getsorted?keys=hostakkhor_pages_*&skip=0&limit=1000`);
+      
+      if (!response.ok) throw new Error('Failed to fetch pages');
+      
+      const data = await response.json();
+      if (data.result && Array.isArray(data.result)) {
+        const pages = data.result
+          .map((item: any) => item.value)
+          .filter((page: any) => page.authorId === user.id)
+          .sort((a: any, b: any) => b.created_at - a.created_at);
+        setState(prev => ({ ...prev, pages }));
+      }
+    } catch (error) {
+      console.error('Error fetching user pages:', error);
+      Alert.alert('Error', 'Failed to load your pages. Please try again.');
+    } finally {
+      setState(prev => ({ ...prev, pagesLoading: false }));
+    }
+  };
 
   const generateTimestamp = () => {
     const now = new Date();
@@ -406,17 +440,20 @@ const CreatePost = () => {
       }
 
       const placeholderImage = '../src/assets/audio-placeholder.svg'; 
+      const selectedPage = state.selectedPage 
+        ? state.pages.find(page => page.id === state.selectedPage)
+        : null;
 
       const post = {
         id: postId,
-        path: key,
+        path: selectedPage ? selectedPage.path : user.path,
         created_at: timestamp,
         updated_at: timestamp,
         authorId: user.id,
         author: {
           id: user.id,
-          name: user.name || 'Anonymous',
-          avatar: user.profileImageUrl || '',
+          name: selectedPage ? selectedPage.name : user.name || 'Anonymous',
+          avatar: selectedPage ? selectedPage.avatar : user.profileImageUrl || '',
           role: user.role || 'user',
         },
         content: state.text,
@@ -428,7 +465,8 @@ const CreatePost = () => {
         comments: 0,
         likedBy: [],
         visibility: state.selectedOption as "public" | "private",
-        pinned: false
+        pinned: false,
+        pageId: selectedPage ? selectedPage.id : null,
       };
 
       console.log('Creating post with data:', post);
@@ -474,13 +512,86 @@ const CreatePost = () => {
         <Text style={styles.title}>Create a Post</Text>
 
         <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.dropdown}
-            onPress={() => setState(prev => ({ ...prev, showDropdown: true }))}
+          {/* Post Destination Dropdown */}
+          <View style={styles.dropdownRow}>
+            <Text style={styles.dropdownLabel}>Post to:</Text>
+            <TouchableOpacity
+              style={styles.destinationDropdown}
+              onPress={() => setState(prev => ({ ...prev, showPageDropdown: true }))}
+            >
+              <Text style={styles.dropdownText}>
+                {state.selectedPage 
+                  ? state.pages.find(page => page.id === state.selectedPage)?.name 
+                  : 'My Profile'}
+              </Text>
+              <Icon name="chevron-down" size={16} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          <Modal
+            visible={state.showPageDropdown}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setState(prev => ({ ...prev, showPageDropdown: false }))}
           >
-            <Text style={styles.dropdownText}>{state.selectedOption}</Text>
-            <Icon name="chevron-down" size={16} color="#666" />
-          </TouchableOpacity>
+            <TouchableWithoutFeedback 
+              onPress={() => setState(prev => ({ ...prev, showPageDropdown: false }))}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={styles.dropdownOptions}>
+                  <TouchableOpacity
+                    style={[
+                      styles.optionItem,
+                      !state.selectedPage && styles.selectedOption,
+                    ]}
+                    onPress={() => {
+                      setState(prev => ({
+                        ...prev,
+                        selectedPage: null,
+                        showPageDropdown: false,
+                      }));
+                    }}
+                  >
+                    <Text style={styles.optionText}>My Profile</Text>
+                  </TouchableOpacity>
+                  {state.pagesLoading ? (
+                    <ActivityIndicator size="small" color="#666" style={styles.loadingIndicator} />
+                  ) : (
+                    state.pages.map((page) => (
+                      <TouchableOpacity
+                        key={page.id}
+                        style={[
+                          styles.optionItem,
+                          state.selectedPage === page.id && styles.selectedOption,
+                        ]}
+                        onPress={() => {
+                          setState(prev => ({
+                            ...prev,
+                            selectedPage: page.id,
+                            showPageDropdown: false,
+                          }));
+                        }}
+                      >
+                        <Text style={styles.optionText}>{page.name}</Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </Modal>
+
+          {/* Visibility Dropdown */}
+          <View style={styles.dropdownRow}>
+            <Text style={styles.dropdownLabel}>Visibility:</Text>
+            <TouchableOpacity
+              style={styles.visibilityDropdown}
+              onPress={() => setState(prev => ({ ...prev, showDropdown: true }))}
+            >
+              <Text style={styles.dropdownText}>{state.selectedOption}</Text>
+              <Icon name="chevron-down" size={16} color="#666" />
+            </TouchableOpacity>
+          </View>
 
           <Modal
             visible={state.showDropdown}
@@ -640,7 +751,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-  dropdown: {
+  dropdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  dropdownLabel: {
+    fontSize: 16,
+    marginRight: 10,
+    color: '#333',
+    fontWeight: '500',
+  },
+  destinationDropdown: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -648,7 +771,16 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 8,
     padding: 12,
-    marginBottom: 16,
+  },
+  visibilityDropdown: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
   },
   dropdownText: {
     fontSize: 16,
@@ -664,6 +796,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 8,
     width: '80%',
+    maxHeight: '60%',
     elevation: 5,
   },
   optionItem: {
@@ -677,6 +810,9 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 16,
     color: '#333',
+  },
+  loadingIndicator: {
+    padding: 16,
   },
   input: {
     borderWidth: 1,

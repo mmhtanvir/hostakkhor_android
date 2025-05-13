@@ -7,9 +7,11 @@ export type RootStackParamList = {
   Profile: { userId: string };
   EditProfile: { userId: string };
   pages: { pageId: string }; 
+  EditPage: { pageId: string };
   CreatePost: undefined;
   CreatePage: undefined;
   PostDetail: { postId: string };
+  PostEdit: { postId: string };
 };
 
 export type ScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<

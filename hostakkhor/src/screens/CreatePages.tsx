@@ -36,6 +36,8 @@ const CreatePage = () => {
   const [loading, setLoading] = useState(false);
   const [avatar, setAvatar] = useState('');
   const [imageFile, setImageFile] = useState<ImageFile | null>(null);
+  const [pages, setPages] = useState<{ id: string; name: string }[]>([]);
+  const [selectedPage, setSelectedPage] = useState<string | null>(null);
 
   const generateTimestamp = () => {
     const now = new Date();

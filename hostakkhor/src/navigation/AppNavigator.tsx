@@ -10,6 +10,7 @@ import CreatePost from '../screens/CreatePosts';
 import CreatePage from '../screens/CreatePages';
 import PostDetailsScreen from '../screens/PostScreen';
 import PagesScreen from '../screens/PagesScreen'; // Make sure to import this
+import EditPage from '../screens/EditPage'; // Import the EditPage screen
 import EditPostScreen from '../screens/EditPost'; // Import the PostEdit screen
 import { RootStackParamList } from '../types/navigation';
 import { colors } from '../styles/globalStyles';
@@ -71,6 +72,11 @@ const AppNavigator = () => {
         name="EditProfile" 
         component={EditProfileScreen} 
         options={{ title: 'Edit Profile' }} 
+      />
+      <Stack.Screen 
+        name="EditPage" 
+        component={EditPage} 
+        options={{ title: 'Edit Page' }} 
       />
       <Stack.Screen 
         name="CreatePost" 

@@ -7,7 +7,8 @@ import {
   TextInput, 
   Image, 
   ActivityIndicator,
-  RefreshControl 
+  RefreshControl,
+  LogBox,
 } from 'react-native';
 import Header from '../components/Header';
 import { globalStyles } from '../styles/globalStyles';
@@ -30,6 +31,8 @@ const HomeScreen = () => {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [page, setPage] = useState<number>(0);
   const [hasMore, setHasMore] = useState<boolean>(true);
+  
+LogBox.ignoreLogs(['Encountered two children with the same key']);
 
   const fetchPosts = async (reset: boolean = false) => {
     try {

@@ -8,11 +8,14 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Dimensions
+  Dimensions,
+  FlatList,
+  RefreshControl
 } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation } from '@react-navigation/native';
 import { RouteProp } from '@react-navigation/native';
+import { globalStyles } from '../styles/globalStyles';
 
 export interface IPage {
   id: string;
@@ -24,6 +27,29 @@ export interface IPage {
   members: string[];
   bio?: string;
   path: string;
+}
+
+export interface IPost {
+  id: string;
+  created_at: number;
+  authorId: string;
+  author: {
+    id: string;
+    name: string;
+    avatar: string;
+    role: string;
+  };
+  content: string;
+  images: string[];
+  audioFiles: string[];
+  videos: string[];
+  category: string;
+  likes: number;
+  comments: number;
+  likedBy: string[];
+  visibility: 'public' | 'private';
+  pinned: boolean;
+  pageId?: string; // Added pageId property
 }
 
 const { width } = Dimensions.get('window');
@@ -44,13 +70,17 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
   const navigation = useNavigation();
   const { pageId } = route.params;
   const [pageInfo, setPageInfo] = useState<IPage | null>(null);
+  const [pagePosts, setPagePosts] = useState<IPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [postsLoading, setPostsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchPageInfo();
+    fetchPagePosts();
   }, [pageId]);
 
   const fetchPageInfo = async () => {
@@ -82,6 +112,43 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
     }
   };
 
+  const fetchPagePosts = async () => {
+    try {
+      setPostsLoading(true);
+      const url = `https://proxy.hostakkhor.com/proxy/getsorted?keys=hostakkhor_posts_*&skip=0&limit=1000`;
+      console.log('Fetching page posts from:', url);
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Raw posts response:', data);
+      
+      if (data?.result && Array.isArray(data.result)) {
+        const posts = data.result
+          .map((item: any) => item.value)
+          .filter((post: IPost) => {
+            // Check both authorId and pageId to cover all cases
+            return post.authorId === pageId || post.pageId === pageId;
+          })
+          .sort((a: IPost, b: IPost) => b.created_at - a.created_at);
+        
+        console.log('Filtered page posts:', posts);
+        setPagePosts(posts);
+      } else {
+        console.error('Unexpected posts response structure:', data);
+        setPagePosts([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch page posts:', error);
+      setError('Failed to load page posts. Please try again.');
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
   const handleDelete = async () => {
     Alert.alert(
       'Delete Page',
@@ -108,7 +175,6 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
               const result = await response.json();
               console.log('Delete response:', result);
 
-              // Assuming result.result === 1 indicates success
               if (result.result === 1) {
                 Alert.alert('Success', 'Page deleted successfully.');
                 navigation.goBack();
@@ -140,8 +206,47 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
   };
 
   const handleRefresh = () => {
-    fetchPageInfo();
+    setRefreshing(true);
+    Promise.all([fetchPageInfo(), fetchPagePosts()])
+      .finally(() => setRefreshing(false));
   };
+
+  const renderPostItem = ({ item }: { item: IPost }) => (
+    <TouchableOpacity
+      style={globalStyles.postCard}
+      onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+      activeOpacity={0.8}
+    >
+      {item.images?.[0] ? (
+        <Image
+          source={{ uri: item.images[0] }}
+          style={globalStyles.postImage}
+          resizeMode="cover"
+          onError={() => console.log('Image load failed')}
+        />
+      ) : (
+        <View style={[globalStyles.postImage, globalStyles.postImagePlaceholder]}>
+          <Text style={globalStyles.postImagePlaceholderText}>No Image</Text>
+        </View>
+      )}
+
+      <View style={globalStyles.postInfo}>
+        <Text style={globalStyles.postAuthor} numberOfLines={1}>
+          {item.author?.name || 'Unknown'}
+        </Text>
+        {item.category && (
+          <Text style={globalStyles.postLocation} numberOfLines={1}>
+            {item.category}
+          </Text>
+        )}
+        {item.content && (
+          <Text style={globalStyles.postContent} numberOfLines={2}>
+            {item.content}
+          </Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
 
   if (loading) {
     return (
@@ -183,7 +288,15 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollContainer}>
+      <ScrollView 
+        style={styles.scrollContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+          />
+        }
+      >
         {/* Back Button */}
         <TouchableOpacity 
           style={styles.backButtonContainer}
@@ -215,24 +328,27 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
         </View>
 
         {/* Action Buttons */}
-        <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity style={styles.actionButton}>
-            <Icon name="copy" size={16} color="#374151" />
-            <Text style={styles.actionButtonText}>Copy Link</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
-            <Icon name="share-alt" size={16} color="#374151" />
-            <Text style={styles.actionButtonText}>Share Page</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
-            <Icon name="pencil" size={16} color="#374151" />
-            <Text style={styles.actionButtonText}>Edit Page</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={handleDelete}>
-            <Icon name="trash" size={16} color="#DC2626" />
-            <Text style={styles.deleteButtonText}>Delete Page</Text>
-          </TouchableOpacity>
-        </View>
+<View style={styles.actionButtonsContainer}>
+  <TouchableOpacity style={styles.actionButton}>
+    <Icon name="copy" size={16} color="#374151" />
+    <Text style={styles.actionButtonText}>Copy Link</Text>
+  </TouchableOpacity>
+  <TouchableOpacity style={styles.actionButton}>
+    <Icon name="share-alt" size={16} color="#374151" />
+    <Text style={styles.actionButtonText}>Share Page</Text>
+  </TouchableOpacity>
+  <TouchableOpacity 
+    style={styles.actionButton}
+    onPress={() => navigation.navigate('EditPage', { pageId: pageId })}
+  >
+    <Icon name="pencil" size={16} color="#374151" />
+    <Text style={styles.actionButtonText}>Edit Page</Text>
+  </TouchableOpacity>
+  <TouchableOpacity style={styles.actionButton} onPress={handleDelete}>
+    <Icon name="trash" size={16} color="#DC2626" />
+    <Text style={styles.deleteButtonText}>Delete Page</Text>
+  </TouchableOpacity>
+</View>
 
         {/* Tabs */}
         <View style={styles.tabsContainer}>
@@ -240,14 +356,26 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
             style={[styles.tab, activeTab === 'all' && styles.activeTab]}
             onPress={() => setActiveTab('all')}
           >
-            <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>All</Text>
+            <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>All Posts</Text>
           </TouchableOpacity>
         </View>
 
-        {/* No Posts */}
-        <View style={styles.noPostsContainer}>
-          <Text style={styles.noPostsText}>No posts found for this filter.</Text>
-        </View>
+        {/* Posts List */}
+        {postsLoading ? (
+          <ActivityIndicator size="small" color="#000" style={{ marginVertical: 20 }} />
+        ) : pagePosts.length > 0 ? (
+          <FlatList
+            data={pagePosts}
+            renderItem={renderPostItem}
+            keyExtractor={(item) => item.id}
+            scrollEnabled={false}
+            contentContainerStyle={styles.postsList}
+          />
+        ) : (
+          <View style={styles.noPostsContainer}>
+            <Text style={styles.noPostsText}>No posts found for this page.</Text>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -393,6 +521,9 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
     fontWeight: '500',
+  },
+  postsList: {
+    paddingBottom: 20,
   },
 });
 

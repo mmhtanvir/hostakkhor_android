@@ -13,27 +13,25 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
-import RNFS from 'react-native-fs';
 import Header from '../components/Header';
 import { globalStyles } from '../styles/globalStyles';
 import { useAuth } from '../contexts/AuthContext';
 
 const API_BASE_URL = 'https://proxy.hostakkhor.com/proxy';
+const FILE_UPLOAD_URL = 'https://files.hostakkhor.com/upload';
 const DEFAULT_AVATAR = 'https://i.ibb.co/94s0s8k/IMG-20240417-040532-623.jpg';
 
 const EditProfileScreen = () => {
   const navigation = useNavigation();
-  const { user, token, fetchUserProfile, fetchUserDetails } = useAuth();
+  const { user, fetchUserProfile, fetchUserDetails } = useAuth();
   
-  // Form state
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
   const [email, setEmail] = useState('');
   const [profileImage, setProfileImage] = useState('');
-  
-  // Loading states
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Load user data on component mount
   useEffect(() => {
@@ -51,7 +49,7 @@ const EditProfileScreen = () => {
         }
       } catch (error) {
         console.error('Error loading user data:', error);
-        Alert.alert('Error', 'Failed to load user data');
+        // Don't show alert for initial load error
       } finally {
         setIsLoading(false);
       }
@@ -60,19 +58,18 @@ const EditProfileScreen = () => {
     loadUserData();
   }, [user]);
 
-  // Request permissions for image picker
   const requestPermissions = async () => {
     if (Platform.OS !== 'android') return true;
 
     try {
-      const permissions = await PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+      const granted = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
         PermissionsAndroid.PERMISSIONS.CAMERA,
       ]);
 
-      return Object.values(permissions).every(
-        (permission) => permission === PermissionsAndroid.RESULTS.GRANTED
+      return (
+        granted['android.permission.READ_MEDIA_IMAGES'] === PermissionsAndroid.RESULTS.GRANTED &&
+        granted['android.permission.CAMERA'] === PermissionsAndroid.RESULTS.GRANTED
       );
     } catch (err) {
       console.warn(err);
@@ -80,33 +77,34 @@ const EditProfileScreen = () => {
     }
   };
 
-  // Handle image upload
   const handleImageUpload = async () => {
     try {
       const hasPermission = await requestPermissions();
       if (!hasPermission) {
         Alert.alert(
           'Permission Required',
-          'Please grant camera and storage permissions to upload images'
+          'Please grant storage and camera permissions to upload images',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() }
+          ]
         );
         return;
       }
 
       const result = await launchImageLibrary({
         mediaType: 'photo',
-        maxWidth: 800,
-        maxHeight: 800,
         quality: 0.8,
+        includeBase64: false,
       });
 
-      if (result.canceled || !result.assets || !result.assets[0]?.uri) {
+      if (result.didCancel || !result.assets || !result.assets[0]?.uri) {
         return;
       }
 
-      setIsSaving(true);
+      setIsUploadingImage(true);
       const imageUri = result.assets[0].uri;
 
-      // Create form data for image upload
       const formData = new FormData();
       formData.append('file', {
         uri: imageUri,
@@ -114,8 +112,7 @@ const EditProfileScreen = () => {
         name: 'profile-image.jpg',
       });
 
-      // Upload image to file server
-      const uploadResponse = await fetch(`${API_BASE_URL}/upload`, {
+      const uploadResponse = await fetch(FILE_UPLOAD_URL, {
         method: 'POST',
         body: formData,
         headers: {
@@ -127,18 +124,45 @@ const EditProfileScreen = () => {
         throw new Error('Failed to upload image');
       }
 
-      const { filename } = await uploadResponse.json();
-      const newImageUrl = `${API_BASE_URL}/files/${filename}`;
-
-      // Update profile with new image URL
-      if (!user?.email) {
-        throw new Error('User email not found');
+      const uploadResult = await uploadResponse.json();
+      if (!uploadResult.filename) {
+        throw new Error('No filename in upload response');
       }
 
-      const key = `hostakkhor_users_${user.email.replace('@', '-').replace('.', '-')}`;
+      const newImageUrl = `https://files.hostakkhor.com/files/${uploadResult.filename}`;
+      setProfileImage(newImageUrl);
+      
+      Alert.alert('Success', 'Profile image updated');
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      Alert.alert('Error', 'Failed to upload image. Please try again.');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleSaveChanges = async () => {
+    if (!user?.id || !user?.email) {
+      Alert.alert('Error', 'You must be logged in to update your profile');
+      return;
+    }
+
+    if (!name.trim()) {
+      Alert.alert('Validation Error', 'Please enter your name');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const key = `hostakkhor_users_${user.id}`;
+      const timestamp = new Date().getTime();
+
       const updateData = {
         ...user,
-        profileImageUrl: newImageUrl,
+        name: name.trim(),
+        bio: bio.trim() || "Hello World",
+        profileImageUrl: profileImage,
+        updated_at: timestamp,
       };
 
       // Update user profile
@@ -157,66 +181,32 @@ const EditProfileScreen = () => {
         throw new Error('Failed to update profile');
       }
 
-      // Update local state and refresh user data
-      setProfileImage(newImageUrl);
-      await fetchUserDetails(user.email);
-      
-      Alert.alert('Success', 'Profile image updated successfully');
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      Alert.alert('Error', 'Failed to upload image. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Handle save changes
-  const handleSaveChanges = async () => {
-    if (!user?.email) {
-      Alert.alert('Error', 'You must be logged in to update your profile');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const key = `hostakkhor_users_${user.email.replace('@', '-').replace('.', '-')}`;
-      const updateData = {
-        email: user.email,
-        name: name,
-        bio: bio || "My world",
-        created_at: user.created_at,
-        updated_at: new Date().toISOString(),
-        id: key,
-        path: key,
-        onboardingCompleted: true,
-        profileImageUrl: profileImage,
-        pinnedPostTheme: user.pinnedPostTheme || "default"
-      };
-
-      // Update user profile
-      const response = await fetch(`${API_BASE_URL}/putjson`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          key: key,
-          value: updateData
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update profile');
+      // Try to refresh user data but don't block on errors
+      try {
+        await Promise.all([
+          fetchUserDetails(user.email),
+        ]);
+      } catch (refreshError) {
+        console.warn('Error refreshing user data:', refreshError);
+        // Continue with navigation even if refresh fails
       }
 
-      // Refresh user data
-      await fetchUserDetails(user.email);
-      
-      Alert.alert('Success', 'Profile updated successfully');
-      navigation.goBack();
+      Alert.alert(
+        'Success', 
+        'Profile updated successfully',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Force navigation even if data refresh failed
+              navigation.goBack();
+            }
+          }
+        ]
+      );
     } catch (error) {
       console.error('Error updating profile:', error);
-      Alert.alert('Error', 'Failed to update profile');
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -247,9 +237,9 @@ const EditProfileScreen = () => {
               <TouchableOpacity 
                 style={globalStyles.cameraIconContainer}
                 onPress={handleImageUpload}
-                disabled={isSaving}
+                disabled={isUploadingImage}
               >
-                {isSaving ? (
+                {isUploadingImage ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Image
