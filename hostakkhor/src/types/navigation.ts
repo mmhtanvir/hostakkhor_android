@@ -6,12 +6,11 @@ export type RootStackParamList = {
   Home: undefined;
   Profile: { userId: string };
   EditProfile: { userId: string };
-  pages: { pageId: string }
+  pages: { pageId: string }; 
   CreatePost: undefined;
   CreatePage: undefined;
   PostDetail: { postId: string };
 };
-
 
 export type ScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<
   RootStackParamList, 
@@ -26,6 +25,7 @@ export type NavigationProp<T extends keyof RootStackParamList> = NativeStackNavi
 export type RouteProp<T extends keyof RootStackParamList> = {
   params: RootStackParamList[T];
 };
+
 declare global {
   namespace ReactNavigation {
     interface RootParamList extends RootStackParamList {}

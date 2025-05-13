@@ -21,6 +21,7 @@ import { globalStyles, colors } from '../styles/globalStyles';
 import Header from '../components/Header';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
+import { NavigationProp } from '../types/navigation';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -36,7 +37,7 @@ const DefaultProfileImage = ({ size }) => (
 );
 
 const ProfileScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<'Profile'>>();
   const { user, fetchUserDetails } = useAuth();
   const [activeTab, setActiveTab] = useState('Posts');
   const [themeModalVisible, setThemeModalVisible] = useState(false);
@@ -297,7 +298,7 @@ const ProfileScreen = () => {
   const renderPageItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={styles.pageCard}
-      onPress={() => navigation.navigate('pagesScreen', { pageId: item.id })}
+      onPress={() => navigation.navigate('pages', { pageId: item.id })}
     >
       <Image
         source={{ uri: item.avatar || 'https://cdn-icons-png.flaticon.com/512/685/685655.png' }}

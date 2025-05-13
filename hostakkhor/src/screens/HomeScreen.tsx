@@ -131,11 +131,12 @@ const HomeScreen = () => {
     <View style={globalStyles.container}>
       <Header
         onLogoPress={() => navigation.navigate('Home')}
-        onProfilePress={() => navigation.navigate('Profile')}
-        showSignIn={false}
-        showProfile={true}
-        profileImageUrl={user?.profileImageUrl} // Pass user's profile image to Header
+        onProfilePress={() => navigation.navigate(user ? 'Profile' : 'SignIn')}
+        showSignIn={!user}
+        showProfile={!!user}
+        profileImageUrl={user?.profileImageUrl}
       />
+
 
       <ScrollView 
         style={globalStyles.content} 
@@ -168,27 +169,39 @@ const HomeScreen = () => {
           expression.
         </Text>
 
-        <TouchableOpacity
-          style={globalStyles.actionButton}
-          onPress={() => navigation.navigate('CreatePage')}
-          activeOpacity={0.7}
-        >
-          <View style={globalStyles.actionButtonContent}>
-            <PageIcon />
-            <Text style={globalStyles.actionButtonText}>Create Your Page</Text>
-          </View>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={globalStyles.actionButton}
+            onPress={() => {
+              if (!user) {
+                navigation.navigate('Welcome'); // or 'SignIn'
+              } else {
+                navigation.navigate('CreatePage');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={globalStyles.actionButtonContent}>
+              <PageIcon />
+              <Text style={globalStyles.actionButtonText}>Create Your Page</Text>
+            </View>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[globalStyles.actionButton, { marginTop: 12 }]}
-          onPress={() => navigation.navigate('CreatePost')}
-          activeOpacity={0.7}
-        >
-          <View style={globalStyles.actionButtonContent}>
-            <PencilIcon />
-            <Text style={globalStyles.actionButtonText}>Create a Post</Text>
-          </View>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[globalStyles.actionButton, { marginTop: 12 }]}
+            onPress={() => {
+              if (!user) {
+                navigation.navigate('Welcome'); // or 'SignIn'
+              } else {
+                navigation.navigate('CreatePost');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={globalStyles.actionButtonContent}>
+              <PencilIcon />
+              <Text style={globalStyles.actionButtonText}>Create a Post</Text>
+            </View>
+          </TouchableOpacity>
 
         <Text style={globalStyles.archiveTitle}>Handwriting Archives</Text>
         <Text style={globalStyles.archiveSubtitle}>

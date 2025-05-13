@@ -9,6 +9,8 @@ import ProfileScreen from '../screens/ProfileScreen';
 import CreatePost from '../screens/CreatePosts';
 import CreatePage from '../screens/CreatePages';
 import PostDetailsScreen from '../screens/PostScreen';
+import PagesScreen from '../screens/PagesScreen'; // Make sure to import this
+import EditPostScreen from '../screens/EditPost'; // Import the PostEdit screen
 import { RootStackParamList } from '../types/navigation';
 import { colors } from '../styles/globalStyles';
 import { useAuth } from '../contexts/AuthContext';
@@ -28,7 +30,7 @@ const AppNavigator = () => {
 
   return (
     <Stack.Navigator
-      initialRouteName={user ? 'Home' : 'Welcome'}
+      initialRouteName="Home"
       screenOptions={{
         headerShown: true,
         headerStyle: {
@@ -84,6 +86,16 @@ const AppNavigator = () => {
         name="PostDetail" 
         component={PostDetailsScreen}
         options={{ title: 'Post Details' }} 
+      />
+      <Stack.Screen 
+        name="PostEdit" 
+        component={EditPostScreen} // Use the EditPostScreen component for editing
+        options={{ title: 'Edit Post' }} 
+      />
+      <Stack.Screen 
+        name="pages" 
+        component={PagesScreen}
+        options={{ title: 'Page Details' }} 
       />
     </Stack.Navigator>
   );

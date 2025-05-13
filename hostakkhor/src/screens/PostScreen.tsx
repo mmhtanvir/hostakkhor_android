@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import {View,Text,StyleSheet,Image,TouchableOpacity,ScrollView,ActivityIndicator,} from 'react-native';
+import {View,Text,StyleSheet,Image,TouchableOpacity,ScrollView,ActivityIndicator,Alert,} from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { globalStyles } from '../styles/globalStyles';
 import Header from '../components/Header';
 import { fetchPostById } from '../api/api'; 
+import { useAuth } from '../contexts/AuthContext';
+
 const PostDetailsScreen = () => {
   const navigation = useNavigation();
+  const { user } = useAuth();
   const route = useRoute();
   const { postId } = route.params as { postId: string }; // Post ID passed through navigation
 
@@ -28,6 +31,43 @@ const PostDetailsScreen = () => {
 
     getPostDetails();
   }, [postId]);
+
+  console.log('Post Details:', post);
+
+  const handleDeletePost = async () => {
+    // Confirm deletion
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to delete this post?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const response = await fetch(
+                `https://proxy.hostakkhor.com/proxy/remove?key=hostakkhor_posts_${postId}`,
+                { method: 'GET' }
+              );
+              if (response.ok) {
+                Alert.alert('Success', 'The post has been deleted.');
+                navigation.goBack(); // Navigate back to the previous screen
+              } else {
+                Alert.alert('Error', 'Failed to delete the post. Please try again.');
+              }
+            } catch (error) {
+              console.error('Error deleting post:', error);
+              Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (loading) {
     return (
@@ -106,6 +146,30 @@ const PostDetailsScreen = () => {
 
           {/* Post Content */}
           <Text style={styles.postContent}>{post.content || 'No content available.'}</Text>
+
+          {/* Buttons (Visible only if user is the author) */}
+          {user?.id === post.author.id && (
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => navigation.navigate('PostEdit', { postId })}
+                accessibilityLabel="Edit Post"
+                accessibilityRole="button"
+              >
+                <Icon name="edit" size={18} color="#fff" />
+                <Text style={styles.editButtonText}>Edit Post</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={handleDeletePost}
+                accessibilityLabel="Delete Post"
+                accessibilityRole="button"
+              >
+                <Icon name="trash" size={18} color="#fff" />
+                <Text style={styles.deleteButtonText}>Delete Post</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -205,5 +269,42 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#888',
     marginBottom: 16,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#5bc0de',
+    paddingVertical: 10,
+    flex: 1,
+    marginRight: 8,
+    borderRadius: 8,
+  },
+  editButtonText: {
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#d9534f',
+    paddingVertical: 10,
+    flex: 1,
+    marginLeft: 8,
+    borderRadius: 8,
+  },
+  deleteButtonText: {
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '500',
   },
 });
