@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -30,23 +30,39 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/Header';
 import { globalStyles } from '../styles/globalStyles';
+import RNFS from 'react-native-fs';
 
 const API_URL = 'https://proxy.hostakkhor.com/proxy';
 const FILE_UPLOAD_URL = 'https://files.hostakkhor.com/upload';
-const audioRecorderPlayer = new AudioRecorderPlayer();
 const { width } = Dimensions.get('window');
 
 interface PostState {
   text: string;
-  selectedOption: string;
-  showDropdown: boolean;
+  selectedVisibility: string;
+  selectedPage: string | null;
+  showVisibilityDropdown: boolean;
+  showPagesDropdown: boolean;
   imageUri: string | null;
   audioUri: string | null;
   imagePreviewUrl: string | null;
-  selectedPage: string | null;
-  showPageDropdown: boolean;
-  pages: any[];
+  userPages: any[];
   pagesLoading: boolean;
+}
+
+interface Page {
+  id: string;
+  name: string;
+  avatar: string;
+  path: string;
+  authorId: string;
+  created_at: number;
+}
+
+interface User {
+  id: string;
+  name?: string;
+  profileImageUrl?: string;
+  role?: string;
 }
 
 const CreatePost = () => {
@@ -57,62 +73,76 @@ const CreatePost = () => {
   const [recordingTime, setRecordingTime] = useState('00:00');
   const [isPlaying, setIsPlaying] = useState(false);
   const [playTime, setPlayTime] = useState('00:00');
+  const audioRecorderPlayer = useRef(new AudioRecorderPlayer());
 
   const [state, setState] = useState<PostState>({
     text: '',
-    selectedOption: 'public',
-    showDropdown: false,
+    selectedVisibility: 'public',
+    selectedPage: null,
+    showVisibilityDropdown: false,
+    showPagesDropdown: false,
     imageUri: null,
     audioUri: null,
     imagePreviewUrl: null,
-    selectedPage: null,
-    showPageDropdown: false,
-    pages: [],
-    pagesLoading: false,
+    userPages: [],
+    pagesLoading: true,
   });
 
-  const postOptions = ['public', 'private'];
+  const visibilityOptions = ['public', 'private'];
+  const placeholderAudioImage = Platform.OS === 'android' ?
+    { uri: '../assets/audio-placeholder.svg' } :
+    require('../assets/audio-placeholder.svg');
 
   useEffect(() => {
-    fetchUserPages();
     return () => {
-      if (isRecording) {
-        stopRecording();
-      }
-      if (isPlaying) {
-        stopPlaying();
-      }
+      cleanupRecording();
     };
   }, []);
 
-  const fetchUserPages = async () => {
-    if (!user?.id) return;
-    
-    try {
-      setState(prev => ({ ...prev, pagesLoading: true }));
-      const response = await fetch(`https://proxy.hostakkhor.com/proxy/getsorted?keys=hostakkhor_pages_*&skip=0&limit=1000`);
-      
-      if (!response.ok) throw new Error('Failed to fetch pages');
-      
-      const data = await response.json();
-      if (data.result && Array.isArray(data.result)) {
-        const pages = data.result
-          .map((item: any) => item.value)
-          .filter((page: any) => page.authorId === user.id)
-          .sort((a: any, b: any) => b.created_at - a.created_at);
-        setState(prev => ({ ...prev, pages }));
-      }
-    } catch (error) {
-      console.error('Error fetching user pages:', error);
-      Alert.alert('Error', 'Failed to load your pages. Please try again.');
-    } finally {
-      setState(prev => ({ ...prev, pagesLoading: false }));
+  const cleanupRecording = async () => {
+    if (isRecording) {
+      await stopRecording();
+    }
+    if (isPlaying) {
+      await stopPlaying();
     }
   };
 
+  useEffect(() => {
+    const fetchUserPages = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const response = await fetch(`${API_URL}/getsorted?keys=hostakkhor_pages_*&skip=0&limit=1000`);
+        
+        if (!response.ok) throw new Error('Failed to fetch pages');
+        
+        const data = await response.json();
+        if (data.result && Array.isArray(data.result)) {
+          const pages = data.result
+            .map((item: any) => item.value)
+            .filter((page: any) => page.authorId === user.id)
+            .sort((a: any, b: any) => b.created_at - a.created_at);
+          setState(prev => ({
+            ...prev,
+            userPages: pages,
+            pagesLoading: false
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching user pages:', error);
+        setState(prev => ({
+          ...prev,
+          pagesLoading: false
+        }));
+      }
+    };
+
+    fetchUserPages();
+  }, [user]);
+
   const generateTimestamp = () => {
-    const now = new Date();
-    return now.getTime();
+    return new Date().getTime();
   };
 
   const generateUniqueId = () => {
@@ -170,16 +200,13 @@ const CreatePost = () => {
         ? await launchCamera(options)
         : await launchImageLibrary(options);
 
-      console.log('Image picker response:', response);
-
       if (response.didCancel) {
         console.log('User cancelled image picker');
       } else if (response.errorCode) {
-        throw new Error(response.errorMessage);
+        throw new Error(response.errorMessage || 'Unknown error occurred');
       } else if (response.assets?.[0]) {
         const asset = response.assets[0];
-        console.log('Selected image:', asset);
-
+        
         setState(prev => ({
           ...prev,
           imageUri: asset.uri || null,
@@ -210,12 +237,11 @@ const CreatePost = () => {
 
     try {
       const timestamp = generateTimestamp();
-      const path = Platform.select({
-        ios: `recording_${timestamp}.m4a`,
-        android: `${timestamp}.m4a`,
-      });
+      const path = Platform.OS === 'android' 
+        ? `${RNFS.CachesDirectoryPath}/recording_${timestamp}.wav`
+        : `recording_${timestamp}.wav`;
 
-      const result = await audioRecorderPlayer.startRecorder(
+      const result = await audioRecorderPlayer.current.startRecorder(
         path,
         {
           AudioEncoderAndroid: AudioEncoderAndroidType.AAC,
@@ -226,12 +252,12 @@ const CreatePost = () => {
         }
       );
 
-      audioRecorderPlayer.addRecordBackListener((e) => {
-        setRecordingTime(audioRecorderPlayer.mmssss(Math.floor(e.currentPosition)));
+      audioRecorderPlayer.current.addRecordBackListener((e) => {
+        setRecordingTime(audioRecorderPlayer.current.mmssss(Math.floor(e.currentPosition)));
       });
 
       setIsRecording(true);
-      console.log('Recording started:', result);
+      console.log('Recording started at:', result);
     } catch (error) {
       console.error('Recording error:', error);
       Alert.alert('Error', 'Failed to start recording. Please try again.');
@@ -242,8 +268,8 @@ const CreatePost = () => {
     if (!isRecording) return;
 
     try {
-      const result = await audioRecorderPlayer.stopRecorder();
-      audioRecorderPlayer.removeRecordBackListener();
+      const result = await audioRecorderPlayer.current.stopRecorder();
+      audioRecorderPlayer.current.removeRecordBackListener();
       setIsRecording(false);
       setState(prev => ({ ...prev, audioUri: result }));
       console.log('Recording stopped at:', result);
@@ -258,13 +284,13 @@ const CreatePost = () => {
 
     try {
       console.log('Starting playback from:', state.audioUri);
-      const result = await audioRecorderPlayer.startPlayer(state.audioUri);
+      const result = await audioRecorderPlayer.current.startPlayer(state.audioUri);
       
-      audioRecorderPlayer.addPlayBackListener((e) => {
+      audioRecorderPlayer.current.addPlayBackListener((e) => {
         if (e.currentPosition === e.duration) {
           stopPlaying();
         } else {
-          setPlayTime(audioRecorderPlayer.mmssss(Math.floor(e.currentPosition)));
+          setPlayTime(audioRecorderPlayer.current.mmssss(Math.floor(e.currentPosition)));
         }
       });
       
@@ -280,8 +306,8 @@ const CreatePost = () => {
     if (!isPlaying) return;
 
     try {
-      await audioRecorderPlayer.stopPlayer();
-      audioRecorderPlayer.removePlayBackListener();
+      await audioRecorderPlayer.current.stopPlayer();
+      audioRecorderPlayer.current.removePlayBackListener();
       setIsPlaying(false);
       setPlayTime('00:00');
     } catch (error) {
@@ -290,6 +316,9 @@ const CreatePost = () => {
   };
 
   const removeAudio = () => {
+    if (isPlaying) {
+      stopPlaying();
+    }
     setState(prev => ({ ...prev, audioUri: null }));
     setRecordingTime('00:00');
     setPlayTime('00:00');
@@ -308,20 +337,18 @@ const CreatePost = () => {
       console.log('Starting file upload:', { type, uri });
     
       const formData = new FormData();
-      const fileExtension = type === 'image' ? 'jpg' : 'm4a';
+      const fileExtension = type === 'image' ? 'jpg' : 'wav';
       const timestamp = generateTimestamp();
       const fileName = `${timestamp}.${fileExtension}`;
     
       const fileData = {
         uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
-        type: type === 'image' ? 'image/jpeg' : 'audio/m4a',
+        type: type === 'image' ? 'image/jpeg' : 'audio/wav',
         name: fileName,
       };
     
       formData.append('file', fileData as any);
-    
-      console.log('Uploading file:', formData);
-    
+      
       const response = await fetch(FILE_UPLOAD_URL, {
         method: 'POST',
         body: formData,
@@ -331,18 +358,14 @@ const CreatePost = () => {
         },
       });
     
-      console.log('Upload response:', response);
-    
       if (!response.ok) {
         throw new Error(`Upload failed with status ${response.status}`);
       }
     
       const result = await response.json();
-      console.log('Upload result:', result);
-    
+      
       if (result.filename) {
         const fileUrl = `https://files.hostakkhor.com/files/${result.filename}`;
-        console.log('Generated file URL:', fileUrl);
         return fileUrl;
       }
     
@@ -370,7 +393,14 @@ const CreatePost = () => {
     try {
       const timestamp = generateTimestamp();
       const postId = generateUniqueId();
-      const key = `hostakkhor_posts_${postId}`;
+      
+      // Determine if posting to profile or page
+      const isPagePost = state.selectedPage !== null;
+      const selectedPage = state.userPages.find(page => page.id === state.selectedPage);
+      
+      const key = isPagePost && selectedPage
+        ? `hostakkhor_posts_${selectedPage.path || selectedPage.name.replace(/\s+/g, '_').toLowerCase()}_${postId}`
+        : `hostakkhor_posts_${postId}`;
 
       let uploadedImageUrl: string | undefined;
       let uploadedAudioUrl: string | undefined;
@@ -378,12 +408,10 @@ const CreatePost = () => {
       // Handle image upload
       if (state.imageUri) {
         try {
-          console.log('Starting image upload...');
           uploadedImageUrl = await uploadFile(state.imageUri, 'image');
-          console.log('Image uploaded successfully:', uploadedImageUrl);
         } catch (error) {
           console.error('Image upload failed:', error);
-          const continueWithoutImage = await new Promise((resolve) => {
+          const continueWithoutImage = await new Promise<boolean>((resolve) => {
             Alert.alert(
               'Upload Error',
               'Failed to upload image. Do you want to continue without the image?',
@@ -414,7 +442,7 @@ const CreatePost = () => {
           uploadedAudioUrl = await uploadFile(state.audioUri, 'audio');
         } catch (error) {
           console.error('Audio upload failed:', error);
-          const continueWithoutAudio = await new Promise((resolve) => {
+          const continueWithoutAudio = await new Promise<boolean>((resolve) => {
             Alert.alert(
               'Upload Error',
               'Failed to upload audio. Do you want to continue without the audio?',
@@ -439,37 +467,33 @@ const CreatePost = () => {
         }
       }
 
-      const placeholderImage = '../src/assets/audio-placeholder.svg'; 
-      const selectedPage = state.selectedPage 
-        ? state.pages.find(page => page.id === state.selectedPage)
-        : null;
-
       const post = {
         id: postId,
-        path: selectedPage ? selectedPage.path : user.path,
+        path: key,
         created_at: timestamp,
         updated_at: timestamp,
-        authorId: user.id,
+        authorId: isPagePost && selectedPage ? selectedPage.id : user.id,
         author: {
-          id: user.id,
-          name: selectedPage ? selectedPage.name : user.name || 'Anonymous',
-          avatar: selectedPage ? selectedPage.avatar : user.profileImageUrl || '',
-          role: user.role || 'user',
+          id: isPagePost && selectedPage ? selectedPage.id : user.id,
+          name: isPagePost && selectedPage ? selectedPage.name : user.name || 'Anonymous',
+          avatar: isPagePost && selectedPage ? selectedPage.avatar : user.profileImageUrl || '',
+          role: isPagePost ? 'page' : user.role || 'user',
         },
         content: state.text,
-        images: uploadedImageUrl ? [uploadedImageUrl] : state.audioUri ? [placeholderImage] : [], 
+        images: uploadedImageUrl ? [uploadedImageUrl] : [placeholderAudioImage],
         audioFiles: uploadedAudioUrl ? [uploadedAudioUrl] : [],
         videos: [],
         category: 'General',
         likes: 0,
         comments: 0,
         likedBy: [],
-        visibility: state.selectedOption as "public" | "private",
+        visibility: state.selectedVisibility as "public" | "private",
         pinned: false,
-        pageId: selectedPage ? selectedPage.id : null,
+        isPagePost: isPagePost,
+        pageId: isPagePost && selectedPage ? selectedPage.id : null
       };
 
-      console.log('Creating post with data:', post);
+      console.log('Post data:', post);
 
       const response = await fetch(`${API_URL}/putjson`, {
         method: 'POST',
@@ -482,13 +506,15 @@ const CreatePost = () => {
         }),
       });
 
+      console.log('Post response:', response);
+
       if (!response.ok) {
         throw new Error('Failed to create post');
       }
 
       Alert.alert(
         'Success',
-        'Post created successfully!',
+        `Post created successfully on ${isPagePost && selectedPage ? selectedPage.name : 'your profile'}!`,
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error) {
@@ -502,7 +528,7 @@ const CreatePost = () => {
   return (
     <KeyboardAvoidingView 
       style={globalStyles.container}
-      behavior={Platform.OS === 'android' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <Header showProfile={true} />
       <ScrollView 
@@ -512,52 +538,66 @@ const CreatePost = () => {
         <Text style={styles.title}>Create a Post</Text>
 
         <View style={styles.card}>
-          {/* Post Destination Dropdown */}
+          {/* Post destination dropdown */}
           <View style={styles.dropdownRow}>
             <Text style={styles.dropdownLabel}>Post to:</Text>
             <TouchableOpacity
-              style={styles.destinationDropdown}
-              onPress={() => setState(prev => ({ ...prev, showPageDropdown: true }))}
+              style={[styles.dropdown, { flex: 1 }]}
+              onPress={() => setState(prev => ({ ...prev, showPagesDropdown: true }))}
             >
               <Text style={styles.dropdownText}>
                 {state.selectedPage 
-                  ? state.pages.find(page => page.id === state.selectedPage)?.name 
+                  ? state.userPages.find(p => p.id === state.selectedPage)?.name 
                   : 'My Profile'}
               </Text>
               <Icon name="chevron-down" size={16} color="#666" />
             </TouchableOpacity>
           </View>
 
+          {/* Visibility dropdown */}
+          <View style={styles.dropdownRow}>
+            <Text style={styles.dropdownLabel}>Visibility:</Text>
+            <TouchableOpacity
+              style={[styles.dropdown, { flex: 1 }]}
+              onPress={() => setState(prev => ({ ...prev, showVisibilityDropdown: true }))}
+            >
+              <Text style={styles.dropdownText}>{state.selectedVisibility}</Text>
+              <Icon name="chevron-down" size={16} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Pages dropdown modal */}
           <Modal
-            visible={state.showPageDropdown}
+            visible={state.showPagesDropdown}
             transparent={true}
             animationType="fade"
-            onRequestClose={() => setState(prev => ({ ...prev, showPageDropdown: false }))}
+            onRequestClose={() => setState(prev => ({ ...prev, showPagesDropdown: false }))}
           >
             <TouchableWithoutFeedback 
-              onPress={() => setState(prev => ({ ...prev, showPageDropdown: false }))}
+              onPress={() => setState(prev => ({ ...prev, showPagesDropdown: false }))}
             >
               <View style={styles.modalOverlay}>
                 <View style={styles.dropdownOptions}>
                   <TouchableOpacity
                     style={[
                       styles.optionItem,
-                      !state.selectedPage && styles.selectedOption,
+                      state.selectedPage === null && styles.selectedOption,
                     ]}
                     onPress={() => {
                       setState(prev => ({
                         ...prev,
                         selectedPage: null,
-                        showPageDropdown: false,
+                        showPagesDropdown: false,
                       }));
                     }}
                   >
                     <Text style={styles.optionText}>My Profile</Text>
                   </TouchableOpacity>
+                  
                   {state.pagesLoading ? (
                     <ActivityIndicator size="small" color="#666" style={styles.loadingIndicator} />
-                  ) : (
-                    state.pages.map((page) => (
+                  ) : state.userPages.length > 0 ? (
+                    state.userPages.map((page) => (
                       <TouchableOpacity
                         key={page.id}
                         style={[
@@ -568,54 +608,60 @@ const CreatePost = () => {
                           setState(prev => ({
                             ...prev,
                             selectedPage: page.id,
-                            showPageDropdown: false,
+                            showPagesDropdown: false,
                           }));
                         }}
                       >
+                        <Image 
+                          source={{ uri: page.avatar || 'https://cdn-icons-png.flaticon.com/512/685/685655.png' }} 
+                          style={styles.pageOptionImage}
+                        />
                         <Text style={styles.optionText}>{page.name}</Text>
                       </TouchableOpacity>
                     ))
+                  ) : (
+                    <View style={styles.noPagesOption}>
+                      <Text style={styles.noPagesText}>You don't have any pages yet</Text>
+                      <TouchableOpacity
+                        style={styles.createPageButton}
+                        onPress={() => {
+                          setState(prev => ({ ...prev, showPagesDropdown: false }));
+                          navigation.navigate('CreatePage' as never);
+                        }}
+                      >
+                        <Text style={styles.createPageText}>Create Page</Text>
+                      </TouchableOpacity>
+                    </View>
                   )}
                 </View>
               </View>
             </TouchableWithoutFeedback>
           </Modal>
 
-          {/* Visibility Dropdown */}
-          <View style={styles.dropdownRow}>
-            <Text style={styles.dropdownLabel}>Visibility:</Text>
-            <TouchableOpacity
-              style={styles.visibilityDropdown}
-              onPress={() => setState(prev => ({ ...prev, showDropdown: true }))}
-            >
-              <Text style={styles.dropdownText}>{state.selectedOption}</Text>
-              <Icon name="chevron-down" size={16} color="#666" />
-            </TouchableOpacity>
-          </View>
-
+          {/* Visibility dropdown modal */}
           <Modal
-            visible={state.showDropdown}
+            visible={state.showVisibilityDropdown}
             transparent={true}
             animationType="fade"
-            onRequestClose={() => setState(prev => ({ ...prev, showDropdown: false }))}
+            onRequestClose={() => setState(prev => ({ ...prev, showVisibilityDropdown: false }))}
           >
             <TouchableWithoutFeedback 
-              onPress={() => setState(prev => ({ ...prev, showDropdown: false }))}
+              onPress={() => setState(prev => ({ ...prev, showVisibilityDropdown: false }))}
             >
               <View style={styles.modalOverlay}>
                 <View style={styles.dropdownOptions}>
-                  {postOptions.map((option) => (
+                  {visibilityOptions.map((option) => (
                     <TouchableOpacity
                       key={option}
                       style={[
                         styles.optionItem,
-                        state.selectedOption === option && styles.selectedOption,
+                        state.selectedVisibility === option && styles.selectedOption,
                       ]}
                       onPress={() => {
                         setState(prev => ({
                           ...prev,
-                          selectedOption: option,
-                          showDropdown: false,
+                          selectedVisibility: option,
+                          showVisibilityDropdown: false,
                         }));
                       }}
                     >
@@ -637,11 +683,12 @@ const CreatePost = () => {
             maxLength={5000}
           />
 
-          {state.imageUri && (
+          {state.imageUri && state.imagePreviewUrl && (
             <View style={styles.previewContainer}>
               <Image 
-                source={{ uri: state.imagePreviewUrl || state.imageUri }}
+                source={{ uri: state.imagePreviewUrl }}
                 style={styles.previewImage}
+                resizeMode="cover"
               />
               <TouchableOpacity
                 style={styles.removeMediaButton}
@@ -721,7 +768,11 @@ const CreatePost = () => {
             ) : (
               <>
                 <Icon name="paper-plane" size={16} color="#fff" />
-                <Text style={styles.submitButtonText}>Post</Text>
+                <Text style={styles.submitButtonText}>
+                  {state.selectedPage 
+                    ? `Post to ${state.userPages.find(p => p.id === state.selectedPage)?.name}`
+                    : 'Post'}
+                </Text>
               </>
             )}
           </TouchableOpacity>
@@ -754,26 +805,15 @@ const styles = StyleSheet.create({
   dropdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   dropdownLabel: {
-    fontSize: 16,
     marginRight: 10,
+    fontSize: 14,
     color: '#333',
     fontWeight: '500',
   },
-  destinationDropdown: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-  },
-  visibilityDropdown: {
-    flex: 1,
+  dropdown: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -783,7 +823,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   dropdownText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#333',
   },
   modalOverlay: {
@@ -803,16 +843,42 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   selectedOption: {
     backgroundColor: '#f0f0f0',
   },
   optionText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#333',
+    marginLeft: 10,
+  },
+  pageOptionImage: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
   },
   loadingIndicator: {
     padding: 16,
+  },
+  noPagesOption: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  noPagesText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 10,
+  },
+  createPageButton: {
+    backgroundColor: '#1a73e8',
+    padding: 10,
+    borderRadius: 5,
+  },
+  createPageText: {
+    color: '#fff',
+    fontSize: 14,
   },
   input: {
     borderWidth: 1,

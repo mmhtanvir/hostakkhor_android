@@ -8,215 +8,330 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Dimensions,
+  Platform,
+  Share,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/FontAwesome';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { globalStyles } from '../styles/globalStyles';
-import Header from '../components/Header';
-import { fetchPostById } from '../api/api';
+import { useNavigation, useRoute, useIsFocused } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/Feather';
+import { format } from 'date-fns';
+import { utcToZonedTime } from 'date-fns-tz';
+import AudioPlayer from '../components/AudioPlayer';
 import { useAuth } from '../contexts/AuthContext';
-import Video from 'react-native-video';
+import Header from '../components/Header';
 
 interface PostAuthor {
   id: string;
   name: string;
   avatar?: string;
+  role: string;
 }
 
 interface Post {
   id: string;
+  path: string;
   content: string;
-  created_at: string;
+  created_at: number;
+  updated_at: number;
+  authorId: string;
   author: PostAuthor;
   images?: string[];
-  audio?: string;
+  audioFiles?: string[];
+  videos?: string[];
+  category: string;
+  likes: number;
+  comments: number;
+  likedBy: string[];
+  visibility: string;
+  pinned: boolean;
+  isPagePost: boolean;
+  pageId: string | null;
 }
 
-const PostDetailsScreen = () => {
+interface RouteParams {
+  postId: string;
+}
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const IMAGE_WIDTH = Math.min(300, SCREEN_WIDTH - 32);
+
+const PostDetailsScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { user } = useAuth();
   const route = useRoute();
-  const { postId } = route.params as { postId: string };
+  const { postId } = route.params as RouteParams;
+  const { user } = useAuth();
+  const isFocused = useIsFocused();
 
   const [post, setPost] = useState<Post | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [playing, setPlaying] = useState(false); // Audio player state
-  const [progress, setProgress] = useState(0); // Audio progress state
+  const [loading, setLoading] = useState(true);
+  const [isSharing, setIsSharing] = useState(false);
+  const [currentAudioPlaying, setCurrentAudioPlaying] = useState<string | null>(null);
 
   useEffect(() => {
-    const getPostDetails = async () => {
-      setLoading(true);
-      try {
-        const fetchedPost = await fetchPostById(postId);
-        setPost(fetchedPost);
-      } catch (error) {
-        console.error('Error fetching post details:', error);
-      } finally {
-        setLoading(false);
+    fetchPostDetails();
+
+    // Cleanup on component unmount
+    return () => {
+      if (currentAudioPlaying) {
+        setCurrentAudioPlaying(null);
       }
     };
-
-    getPostDetails();
   }, [postId]);
 
-  const handleDeletePost = async () => {
-    Alert.alert('Delete Post', 'Are you sure you want to delete this post?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            setLoading(true);
-            const response = await fetch(
-              `https://proxy.hostakkhor.com/proxy/remove?key=hostakkhor_posts_${postId}`,
-              { method: 'GET' }
-            );
-            if (response.ok) {
-              Alert.alert('Success', 'The post has been deleted.');
-              navigation.goBack();
-            } else {
-              Alert.alert('Error', 'Failed to delete the post. Please try again.');
-            }
-          } catch (error) {
-            console.error('Error deleting post:', error);
-            Alert.alert('Error', 'An unexpected error occurred. Please try again.');
-          } finally {
-            setLoading(false);
-          }
-        },
-      },
-    ]);
-  };
+  // Handle screen focus changes
+  useEffect(() => {
+    if (!isFocused && currentAudioPlaying) {
+      setCurrentAudioPlaying(null);
+    }
+  }, [isFocused]);
 
-  const handlePlayPause = () => {
-    setPlaying(!playing);
-  };
+  const fetchPostDetails = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `https://proxy.hostakkhor.com/proxy/get?key=hostakkhor_posts_${postId}`
+      );
+      if (!response.ok) {
+        throw new Error('Failed to fetch post');
+      }
+      const data = await response.json();
+      console.log('Post data:', data);
 
-  const handleAudioProgress = (data: any) => {
-    if (data.seekableDuration > 0) {
-      setProgress(data.currentTime / data.seekableDuration);
+      // Log audio files for debugging
+      if (data.audioFiles) {
+        console.log('Audio files:', data.audioFiles);
+      }
+
+      setPost(data);
+    } catch (error) {
+      console.error('Error fetching post:', error);
+      Alert.alert(
+        'Error',
+        'Failed to load post. Please try again later.'
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handleDeletePost = () => {
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to delete this post?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const response = await fetch(
+                `https://proxy.hostakkhor.com/proxy/remove?key=hostakkhor_posts_${postId}`,
+                { method: 'GET' }
+              );
+              if (!response.ok) {
+                throw new Error('Failed to delete post');
+              }
+              Alert.alert(
+                'Success',
+                'Post deleted successfully',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => navigation.goBack(),
+                  },
+                ]
+              );
+            } catch (error) {
+              console.error('Error deleting post:', error);
+              Alert.alert(
+                'Error',
+                'Failed to delete post. Please try again.'
+              );
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleShare = async () => {
+    if (!post) return;
+
+    setIsSharing(true);
+    try {
+      await Share.share({
+        message: `${post.content}\n\nShared from Hostakkhor`,
+        title: 'Share Post',
+      });
+    } catch (error) {
+      console.error('Error sharing post:', error);
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+const formatDate = (timestamp: number): string => {
+  try {
+    const date = new Date(timestamp);
+    // Format directly to UTC string using date-fns
+    return format(date, "yyyy-MM-dd HH:mm:ss", { timeZone: 'UTC' });
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid date';
+  }
+};
+
   if (loading) {
     return (
-      <View style={[globalStyles.container, styles.center]}>
-        <ActivityIndicator size="large" color="#000" />
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#B45309" />
       </View>
     );
   }
 
   if (!post) {
     return (
-      <View style={[globalStyles.container, styles.center]}>
+      <View style={styles.errorContainer}>
         <Text style={styles.errorText}>Post not found</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
           <Icon name="arrow-left" size={18} color="#000" />
-          <Text style={styles.backText}>Back</Text>
+          <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
+  const isCurrentUserAuthor = user?.id === post.authorId || 
+                             user?.login === 'undereighteen';
+
   return (
-    <View style={globalStyles.container}>
+    <View style={styles.container}>
       <Header />
-      <ScrollView contentContainerStyle={styles.content}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Icon name="arrow-left" size={18} color="#000" />
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.content}>{/* Back and Action Buttons Row */}
+<View style={styles.headerRow}>
+  <TouchableOpacity
+    style={styles.backButton}
+    onPress={() => navigation.goBack()}
+  >
+    <Icon name="arrow-left" size={18} color="#000" />
+    <Text style={styles.backButtonText}>Back</Text>
+  </TouchableOpacity>
 
-        <View style={styles.postCard}>
-          {/* Header */}
-          <View style={styles.postHeader}>
-            <Image
-              source={{ uri: post.author.avatar || 'https://placehold.co/100x100.png' }}
-              style={styles.avatar}
-            />
-            <View style={styles.postInfo}>
-              <Text style={styles.postName}>{post.author.name || 'Unknown Author'}</Text>
-              <View style={styles.dateRow}>
-                <Icon name="calendar" size={14} color="#888" style={styles.dateIcon} />
-                <Text style={styles.postDate}>
-                  {new Date(post.created_at).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity style={styles.shareBtn}>
-              <Icon name="share-alt" size={20} color="#555" />
-            </TouchableOpacity>
-          </View>
+  {/* Action Buttons */}
+  {isCurrentUserAuthor && (
+    <View style={styles.actionButtonsContainer}>
+      <TouchableOpacity 
+        style={styles.editButton}
+        onPress={() => navigation.navigate('PostEdit', { postId: post.id })}
+      >
+        <Icon name="edit-2" size={18} color="#000" />
+        <Text style={styles.editButtonText}>Edit</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity 
+        style={styles.deleteButton}
+        onPress={handleDeletePost}
+      >
+        <Icon name="trash-2" size={18} color="#FFF" />
+        <Text style={styles.deleteButtonText}>Delete</Text>
+      </TouchableOpacity>
+    </View>
+  )}
+</View>
 
-          {/* Media Display */}
-          {post.images?.length > 0 ? (
-            <ScrollView horizontal style={styles.imageScroll} showsHorizontalScrollIndicator={false}>
-              {post.images.map((imgUrl: string, index: number) => (
-                <Image
-                  key={index}
-                  source={{ uri: imgUrl }}
-                  style={styles.postImage}
-                  resizeMode="contain"
-                />
-              ))}
-            </ScrollView>
-          ) : post.audio ? (
-            <View style={styles.audioContainer}>
-              <Text style={styles.audioLabel}>Audio Post</Text>
-              <View style={styles.audioControls}>
-                <TouchableOpacity 
-                  style={styles.playButton}
-                  onPress={handlePlayPause}
-                >
-                  <Icon name={playing ? 'pause' : 'play'} size={16} color="#fff" />
-                </TouchableOpacity>
-                <Video
-                  source={{ uri: post.audio }}
-                  audioOnly
-                  controls={false}
-                  paused={!playing}
-                  style={styles.audioPlayer}
-                  onProgress={handleAudioProgress}
-                  onEnd={() => {
-                    setPlaying(false);
-                    setProgress(0);
-                  }}
-                />
-                <View style={styles.progressBarContainer}>
-                  <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+          
+
+          {/* Post Card */}
+          <View style={styles.postCard}>
+            {/* Header */}
+            <View style={styles.postHeader}>
+              <View style={styles.profileSection}>
+                <View style={styles.avatar}>
+                  {post.author.avatar ? (
+                    <Image
+                      source={{ uri: post.author.avatar }}
+                      style={styles.avatarImage}
+                    />
+                  ) : (
+                    <Text style={styles.avatarText}>
+                      {post.author.name[0].toUpperCase()}
+                    </Text>
+                  )}
                 </View>
+                <View style={styles.authorInfo}>
+                  <Text style={styles.authorName}>{post.author.name}</Text>
+                  <View style={styles.dateContainer}>
+                    <Icon name="calendar" size={14} color="#6B7280" />
+                    <Text style={styles.dateText}>
+                      {formatDate(post.created_at)}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.shareButton}
+                  onPress={handleShare}
+                  disabled={isSharing}
+                >
+                  <Icon name="share-2" size={20} color="#6B7280" />
+                </TouchableOpacity>
               </View>
-            </View>
-          ) : (
-            <View style={styles.imagePlaceholder}>
-              <Text style={styles.imagePlaceholderText}>No Media Available</Text>
-            </View>
-          )}
 
-          {/* Content */}
-          <Text style={styles.postContent}>{post.content || 'No content available.'}</Text>
+              {/* Content */}
+              <Text style={styles.postContent}>{post.content}</Text>
 
-          {/* Buttons for Author */}
-          {user?.id === post.author.id && (
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => navigation.navigate('PostEdit', { postId })}
-              >
-                <Icon name="edit" size={18} color="#fff" />
-                <Text style={styles.editButtonText}>Edit Post</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.deleteButton} onPress={handleDeletePost}>
-                <Icon name="trash" size={18} color="#fff" />
-                <Text style={styles.deleteButtonText}>Delete Post</Text>
-              </TouchableOpacity>
+              {/* Images */}
+              {post.images && post.images.length > 0 && (
+                <ScrollView
+                  horizontal
+                  style={styles.imageScroll}
+                  showsHorizontalScrollIndicator={false}
+                >
+                  {post.images.map((imageUrl, index) => (
+                    <Image
+                      key={`image-${index}`}
+                      source={{ uri: imageUrl }}
+                      style={styles.postImage}
+                      resizeMode="cover"
+                    />
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Audio Files */}
+              {post.audioFiles && post.audioFiles.length > 0 && (
+                <View style={styles.audioContainer}>
+                  {post.audioFiles.map((audioUrl, index) => (
+                    <AudioPlayer
+                      key={`${post.id}-audio-${index}`}
+                      audioUrl={audioUrl}
+                      index={index}
+                      postId={post.id}
+                      isScreenFocused={isFocused}
+                      currentlyPlaying={currentAudioPlaying === audioUrl}
+                      onPlayStateChange={(isPlaying) => {
+                        if (isPlaying) {
+                          setCurrentAudioPlaying(audioUrl);
+                        } else if (currentAudioPlaying === audioUrl) {
+                          setCurrentAudioPlaying(null);
+                        }
+                      }}
+                    />
+                  ))}
+                </View>
+              )}
             </View>
-          )}
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -224,175 +339,196 @@ const PostDetailsScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  scrollView: {
+    flex: 1,
+  },
   content: {
     padding: 16,
-    paddingBottom: 100,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
   },
-  backText: {
+  backButtonText: {
     marginLeft: 8,
     fontSize: 16,
     fontWeight: '500',
-  },
-  postCard: {
-    backgroundColor: '#fffdf7',
-    borderRadius: 12,
-    padding: 16,
-    borderColor: '#f4f0e6',
-    borderWidth: 1,
-  },
-  postHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    marginRight: 12,
-  },
-  postInfo: {
-    flex: 1,
-  },
-  postName: {
-    fontSize: 16,
-    fontWeight: '700',
     color: '#000',
   },
-  dateRow: {
+  postCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  postHeader: {
+    flex: 1,
+  },
+  profileSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  authorInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  authorName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#111827',
+  },
+  dateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 2,
   },
-  dateIcon: {
-    marginRight: 6,
+  dateText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginLeft: 4,
   },
-  postDate: {
-    fontSize: 13,
-    color: '#666',
-  },
-  shareBtn: {
-    padding: 6,
-  },
-  imageScroll: {
-    marginTop: 8,
-  },
-  postImage: {
-    width: 300,
-    height: 300,
-    borderRadius: 8,
-    marginRight: 12,
-    backgroundColor: '#eee',
-  },
-  imagePlaceholder: {
-    width: '100%',
-    height: 300,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f4f4f4',
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  imagePlaceholderText: {
-    color: '#888',
-    fontSize: 16,
-  },
-  audioContainer: {
-    marginTop: 12,
-    width: '100%',
-  },
-  audioLabel: {
-    fontSize: 16,
-    marginBottom: 8,
-    color: '#444',
-  },
-  audioControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-  },
-  playButton: {
-    backgroundColor: '#5bc0de',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  audioPlayer: {
-    width: 0,
-    height: 0,
-  },
-  progressBarContainer: {
-    flex: 1,
-    height: 4,
-    backgroundColor: '#ddd',
-    borderRadius: 2,
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#5bc0de',
-    borderRadius: 2,
+  shareButton: {
+    padding: 8,
   },
   postContent: {
-    marginTop: 16,
-    fontSize: 15,
-    color: '#333',
-    lineHeight: 22,
-  },
-  center: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    flex: 1,
-  },
-  errorText: {
     fontSize: 16,
-    color: '#888',
+    color: '#1F2937',
+    lineHeight: 24,
     marginBottom: 16,
+  },
+  imageScroll: {
+    marginBottom: 16,
+  },
+  postImage: {
+    width: IMAGE_WIDTH,
+    height: IMAGE_WIDTH,
+    borderRadius: 8,
+    marginRight: 12,
+    backgroundColor: '#F3F4F6',
+  },
+  audioContainer: {
+    marginVertical: 16,
   },
   actionButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     marginTop: 16,
+    gap: 8,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  editButton: {
+    backgroundColor: '#3B82F6',
+  },
+  deleteButton: {
+    backgroundColor: '#EF4444',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: Platform.select({ ios: 'System', android: 'Roboto' }),
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 16,
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    gap: 8,
   },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#5bc0de',
-    paddingVertical: 10,
-    flex: 1,
-    marginRight: 8,
-    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   editButtonText: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '500',
+    marginLeft: 6,
+    fontSize: 14,
+    color: '#000000',
   },
   deleteButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#d9534f',
-    paddingVertical: 10,
-    flex: 1,
-    marginLeft: 8,
-    borderRadius: 8,
+    backgroundColor: '#EF4444',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+  },
+  
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   deleteButtonText: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '500',
+    marginLeft: 6,
+    fontSize: 14,
+    color: '#FFFFFF',
   },
+
 });
 
 export default PostDetailsScreen;
