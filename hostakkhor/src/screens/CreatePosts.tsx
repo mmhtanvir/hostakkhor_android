@@ -3,21 +3,22 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
-  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
   Image,
+  ScrollView,
+  SafeAreaView,
+  Platform,
   Modal,
   TouchableWithoutFeedback,
-  Alert,
-  Platform,
-  PermissionsAndroid,
-  ActivityIndicator,
-  Dimensions,
   KeyboardAvoidingView,
-  Keyboard,
   Linking,
+  PermissionsAndroid,
+  Dimensions,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation } from '@react-navigation/native';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import AudioRecorderPlayer, {
@@ -26,28 +27,12 @@ import AudioRecorderPlayer, {
   AudioEncoderAndroidType,
   AudioSourceAndroidType,
 } from 'react-native-audio-recorder-player';
-import Icon from 'react-native-vector-icons/FontAwesome';
 import { useAuth } from '../contexts/AuthContext';
-import Header from '../components/Header';
-import { globalStyles } from '../styles/globalStyles';
+import { format } from 'date-fns';
 import RNFS from 'react-native-fs';
 
 const API_URL = 'https://proxy.hostakkhor.com/proxy';
 const FILE_UPLOAD_URL = 'https://files.hostakkhor.com/upload';
-const { width } = Dimensions.get('window');
-
-interface PostState {
-  text: string;
-  selectedVisibility: string;
-  selectedPage: string | null;
-  showVisibilityDropdown: boolean;
-  showPagesDropdown: boolean;
-  imageUri: string | null;
-  audioUri: string | null;
-  imagePreviewUrl: string | null;
-  userPages: any[];
-  pagesLoading: boolean;
-}
 
 interface Page {
   id: string;
@@ -68,6 +53,7 @@ interface User {
 const CreatePost = () => {
   const navigation = useNavigation();
   const { user } = useAuth();
+  const [currentDate, setCurrentDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState('00:00');
@@ -75,29 +61,29 @@ const CreatePost = () => {
   const [playTime, setPlayTime] = useState('00:00');
   const audioRecorderPlayer = useRef(new AudioRecorderPlayer());
 
-  const [state, setState] = useState<PostState>({
-    text: '',
-    selectedVisibility: 'public',
-    selectedPage: null,
-    showVisibilityDropdown: false,
-    showPagesDropdown: false,
-    imageUri: null,
-    audioUri: null,
-    imagePreviewUrl: null,
-    userPages: [],
-    pagesLoading: true,
-  });
-
-  const visibilityOptions = ['public', 'private'];
-  const placeholderAudioImage = Platform.OS === 'android' ?
-    { uri: '../assets/audio-placeholder.svg' } :
-    require('../assets/audio-placeholder.svg');
+  const [content, setContent] = useState('');
+  const [imageUri, setImageUri] = useState('');
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  const [audioUri, setAudioUri] = useState('');
+  const [isPinned, setIsPinned] = useState(false);
+  const [postType, setPostType] = useState('Personal Post');
+  const [showImageOptions, setShowImageOptions] = useState(false);
+  const [userPages, setUserPages] = useState<Page[]>([]);
+  const [showPagesDropdown, setShowPagesDropdown] = useState(false);
 
   useEffect(() => {
+    updateCurrentDate();
+    fetchUserPages();
     return () => {
       cleanupRecording();
     };
   }, []);
+
+  const updateCurrentDate = () => {
+    const date = new Date();
+    const formattedDate = format(date, 'yyyy-MM-dd HH:mm:ss');
+    setCurrentDate(formattedDate);
+  };
 
   const cleanupRecording = async () => {
     if (isRecording) {
@@ -108,38 +94,26 @@ const CreatePost = () => {
     }
   };
 
-  useEffect(() => {
-    const fetchUserPages = async () => {
-      if (!user?.id) return;
+  const fetchUserPages = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const response = await fetch(`${API_URL}/getsorted?keys=hostakkhor_pages_*&skip=0&limit=1000`);
       
-      try {
-        const response = await fetch(`${API_URL}/getsorted?keys=hostakkhor_pages_*&skip=0&limit=1000`);
-        
-        if (!response.ok) throw new Error('Failed to fetch pages');
-        
-        const data = await response.json();
-        if (data.result && Array.isArray(data.result)) {
-          const pages = data.result
-            .map((item: any) => item.value)
-            .filter((page: any) => page.authorId === user.id)
-            .sort((a: any, b: any) => b.created_at - a.created_at);
-          setState(prev => ({
-            ...prev,
-            userPages: pages,
-            pagesLoading: false
-          }));
-        }
-      } catch (error) {
-        console.error('Error fetching user pages:', error);
-        setState(prev => ({
-          ...prev,
-          pagesLoading: false
-        }));
+      if (!response.ok) throw new Error('Failed to fetch pages');
+      
+      const data = await response.json();
+      if (data.result && Array.isArray(data.result)) {
+        const pages = data.result
+          .map((item: any) => item.value)
+          .filter((page: any) => page.authorId === user.id)
+          .sort((a: any, b: any) => b.created_at - a.created_at);
+        setUserPages(pages);
       }
-    };
-
-    fetchUserPages();
-  }, [user]);
+    } catch (error) {
+      console.error('Error fetching user pages:', error);
+    }
+  };
 
   const generateTimestamp = () => {
     return new Date().getTime();
@@ -206,19 +180,16 @@ const CreatePost = () => {
         throw new Error(response.errorMessage || 'Unknown error occurred');
       } else if (response.assets?.[0]) {
         const asset = response.assets[0];
-        
-        setState(prev => ({
-          ...prev,
-          imageUri: asset.uri || null,
-          imagePreviewUrl: asset.base64
-            ? `data:image/jpeg;base64,${asset.base64}`
-            : asset.uri || null,
-        }));
+        setImageUri(asset.uri || '');
+        setImagePreviewUrl(asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri || '');
       }
     } catch (error) {
       console.error('Image selection error:', error);
       Alert.alert('Error', 'Failed to select image. Please try again.');
     }
+    setShowImageOptions(false);
   };
 
   const startRecording = async () => {
@@ -271,7 +242,7 @@ const CreatePost = () => {
       const result = await audioRecorderPlayer.current.stopRecorder();
       audioRecorderPlayer.current.removeRecordBackListener();
       setIsRecording(false);
-      setState(prev => ({ ...prev, audioUri: result }));
+      setAudioUri(result);
       console.log('Recording stopped at:', result);
     } catch (error) {
       console.error('Stop recording error:', error);
@@ -280,11 +251,11 @@ const CreatePost = () => {
   };
 
   const startPlaying = async () => {
-    if (!state.audioUri) return;
+    if (!audioUri) return;
 
     try {
-      console.log('Starting playback from:', state.audioUri);
-      const result = await audioRecorderPlayer.current.startPlayer(state.audioUri);
+      console.log('Starting playback from:', audioUri);
+      const result = await audioRecorderPlayer.current.startPlayer(audioUri);
       
       audioRecorderPlayer.current.addPlayBackListener((e) => {
         if (e.currentPosition === e.duration) {
@@ -319,17 +290,14 @@ const CreatePost = () => {
     if (isPlaying) {
       stopPlaying();
     }
-    setState(prev => ({ ...prev, audioUri: null }));
+    setAudioUri('');
     setRecordingTime('00:00');
     setPlayTime('00:00');
   };
 
   const removeImage = () => {
-    setState(prev => ({
-      ...prev,
-      imageUri: null,
-      imagePreviewUrl: null,
-    }));
+    setImageUri('');
+    setImagePreviewUrl('');
   };
 
   const uploadFile = async (uri: string, type: 'image' | 'audio'): Promise<string> => {
@@ -382,21 +350,20 @@ const CreatePost = () => {
       return;
     }
 
-    if (!state.text.trim()) {
+    if (!content.trim()) {
       Alert.alert('Required', 'Please enter some text for your post');
       return;
     }
 
     setLoading(true);
-    Keyboard.dismiss();
 
     try {
       const timestamp = generateTimestamp();
       const postId = generateUniqueId();
       
       // Determine if posting to profile or page
-      const isPagePost = state.selectedPage !== null;
-      const selectedPage = state.userPages.find(page => page.id === state.selectedPage);
+      const isPagePost = postType !== 'Personal Post';
+      const selectedPage = userPages.find(page => page.name === postType);
       
       const key = isPagePost && selectedPage
         ? `hostakkhor_posts_${selectedPage.path || selectedPage.name.replace(/\s+/g, '_').toLowerCase()}_${postId}`
@@ -406,9 +373,9 @@ const CreatePost = () => {
       let uploadedAudioUrl: string | undefined;
 
       // Handle image upload
-      if (state.imageUri) {
+      if (imageUri) {
         try {
-          uploadedImageUrl = await uploadFile(state.imageUri, 'image');
+          uploadedImageUrl = await uploadFile(imageUri, 'image');
         } catch (error) {
           console.error('Image upload failed:', error);
           const continueWithoutImage = await new Promise<boolean>((resolve) => {
@@ -437,9 +404,9 @@ const CreatePost = () => {
       }
 
       // Handle audio upload
-      if (state.audioUri) {
+      if (audioUri) {
         try {
-          uploadedAudioUrl = await uploadFile(state.audioUri, 'audio');
+          uploadedAudioUrl = await uploadFile(audioUri, 'audio');
         } catch (error) {
           console.error('Audio upload failed:', error);
           const continueWithoutAudio = await new Promise<boolean>((resolve) => {
@@ -479,16 +446,16 @@ const CreatePost = () => {
           avatar: isPagePost && selectedPage ? selectedPage.avatar : user.profileImageUrl || '',
           role: isPagePost ? 'page' : user.role || 'user',
         },
-        content: state.text,
-        images: uploadedImageUrl ? [uploadedImageUrl] : [placeholderAudioImage],
+        content: content,
+        images: uploadedImageUrl ? [uploadedImageUrl] : [], 
         audioFiles: uploadedAudioUrl ? [uploadedAudioUrl] : [],
         videos: [],
         category: 'General',
         likes: 0,
         comments: 0,
         likedBy: [],
-        visibility: state.selectedVisibility as "public" | "private",
-        pinned: false,
+        visibility: 'public',
+        pinned: isPinned,
         isPagePost: isPagePost,
         pageId: isPagePost && selectedPage ? selectedPage.id : null
       };
@@ -526,430 +493,397 @@ const CreatePost = () => {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={globalStyles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <Header showProfile={true} />
-      <ScrollView 
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Icon name="arrow-left" size={20} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Create Post</Text>
+        </View>
+        <Text style={styles.dateText}>{currentDate}</Text>
+      </View>
+
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardAvoidingView}
       >
-        <Text style={styles.title}>Create a Post</Text>
-
-        <View style={styles.card}>
-          {/* Post destination dropdown */}
-          <View style={styles.dropdownRow}>
-            <Text style={styles.dropdownLabel}>Post to:</Text>
-            <TouchableOpacity
-              style={[styles.dropdown, { flex: 1 }]}
-              onPress={() => setState(prev => ({ ...prev, showPagesDropdown: true }))}
+        <ScrollView style={styles.scrollView} keyboardShouldPersistTaps="handled">
+          <View style={styles.formContainer}>
+            {/* Post Type Selector */}
+            <TouchableOpacity 
+              style={styles.pageSelector}
+              onPress={() => setShowPagesDropdown(true)}
             >
-              <Text style={styles.dropdownText}>
-                {state.selectedPage 
-                  ? state.userPages.find(p => p.id === state.selectedPage)?.name 
-                  : 'My Profile'}
-              </Text>
-              <Icon name="chevron-down" size={16} color="#666" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Visibility dropdown */}
-          <View style={styles.dropdownRow}>
-            <Text style={styles.dropdownLabel}>Visibility:</Text>
-            <TouchableOpacity
-              style={[styles.dropdown, { flex: 1 }]}
-              onPress={() => setState(prev => ({ ...prev, showVisibilityDropdown: true }))}
-            >
-              <Text style={styles.dropdownText}>{state.selectedVisibility}</Text>
-              <Icon name="chevron-down" size={16} color="#666" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Pages dropdown modal */}
-          <Modal
-            visible={state.showPagesDropdown}
-            transparent={true}
-            animationType="fade"
-            onRequestClose={() => setState(prev => ({ ...prev, showPagesDropdown: false }))}
-          >
-            <TouchableWithoutFeedback 
-              onPress={() => setState(prev => ({ ...prev, showPagesDropdown: false }))}
-            >
-              <View style={styles.modalOverlay}>
-                <View style={styles.dropdownOptions}>
-                  <TouchableOpacity
-                    style={[
-                      styles.optionItem,
-                      state.selectedPage === null && styles.selectedOption,
-                    ]}
-                    onPress={() => {
-                      setState(prev => ({
-                        ...prev,
-                        selectedPage: null,
-                        showPagesDropdown: false,
-                      }));
-                    }}
-                  >
-                    <Text style={styles.optionText}>My Profile</Text>
-                  </TouchableOpacity>
-                  
-                  {state.pagesLoading ? (
-                    <ActivityIndicator size="small" color="#666" style={styles.loadingIndicator} />
-                  ) : state.userPages.length > 0 ? (
-                    state.userPages.map((page) => (
-                      <TouchableOpacity
-                        key={page.id}
-                        style={[
-                          styles.optionItem,
-                          state.selectedPage === page.id && styles.selectedOption,
-                        ]}
-                        onPress={() => {
-                          setState(prev => ({
-                            ...prev,
-                            selectedPage: page.id,
-                            showPagesDropdown: false,
-                          }));
-                        }}
-                      >
-                        <Image 
-                          source={{ uri: page.avatar || 'https://cdn-icons-png.flaticon.com/512/685/685655.png' }} 
-                          style={styles.pageOptionImage}
-                        />
-                        <Text style={styles.optionText}>{page.name}</Text>
-                      </TouchableOpacity>
-                    ))
-                  ) : (
-                    <View style={styles.noPagesOption}>
-                      <Text style={styles.noPagesText}>You don't have any pages yet</Text>
-                      <TouchableOpacity
-                        style={styles.createPageButton}
-                        onPress={() => {
-                          setState(prev => ({ ...prev, showPagesDropdown: false }));
-                          navigation.navigate('CreatePage' as never);
-                        }}
-                      >
-                        <Text style={styles.createPageText}>Create Page</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
+              <Text style={styles.pageSelectorLabel}>Post to:</Text>
+              <View style={styles.pageSelectorContent}>
+                <Text style={styles.pageSelectorText}>
+                  {postType === 'Personal Post' ? 'My Profile' : postType}
+                </Text>
+                <Icon name="chevron-down" size={16} color="#666" />
               </View>
-            </TouchableWithoutFeedback>
-          </Modal>
+            </TouchableOpacity>
 
-          {/* Visibility dropdown modal */}
-          <Modal
-            visible={state.showVisibilityDropdown}
-            transparent={true}
-            animationType="fade"
-            onRequestClose={() => setState(prev => ({ ...prev, showVisibilityDropdown: false }))}
-          >
-            <TouchableWithoutFeedback 
-              onPress={() => setState(prev => ({ ...prev, showVisibilityDropdown: false }))}
-            >
-              <View style={styles.modalOverlay}>
-                <View style={styles.dropdownOptions}>
-                  {visibilityOptions.map((option) => (
-                    <TouchableOpacity
-                      key={option}
-                      style={[
-                        styles.optionItem,
-                        state.selectedVisibility === option && styles.selectedOption,
-                      ]}
-                      onPress={() => {
-                        setState(prev => ({
-                          ...prev,
-                          selectedVisibility: option,
-                          showVisibilityDropdown: false,
-                        }));
-                      }}
-                    >
-                      <Text style={styles.optionText}>{option}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </TouchableWithoutFeedback>
-          </Modal>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Share your thoughts..."
-            value={state.text}
-            onChangeText={(text) => setState(prev => ({ ...prev, text }))}
-            multiline
-            placeholderTextColor="#888"
-            maxLength={5000}
-          />
-
-          {state.imageUri && state.imagePreviewUrl && (
-            <View style={styles.previewContainer}>
-              <Image 
-                source={{ uri: state.imagePreviewUrl }}
-                style={styles.previewImage}
-                resizeMode="cover"
+            {/* Content Input */}
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.contentInput}
+                value={content}
+                onChangeText={setContent}
+                placeholder="What's on your mind?"
+                multiline
+                placeholderTextColor="#999"
+                textAlignVertical="top"
               />
-              <TouchableOpacity
-                style={styles.removeMediaButton}
-                onPress={removeImage}
-              >
-                <Icon name="times-circle" size={24} color="#fff" />
-              </TouchableOpacity>
             </View>
-          )}
 
-          {state.audioUri && (
-            <View style={styles.audioPreviewContainer}>
-              <TouchableOpacity
-                style={styles.playButton}
-                onPress={isPlaying ? stopPlaying : startPlaying}
-              >
-                <Icon 
-                  name={isPlaying ? "pause" : "play"} 
-                  size={24} 
-                  color="#1a73e8" 
+            {/* Image Preview */}
+            {imagePreviewUrl ? (
+              <View style={styles.imageContainer}>
+                <Image
+                  source={{ uri: imagePreviewUrl }}
+                  style={styles.imagePreview}
+                  resizeMode="cover"
                 />
-                <Text style={styles.playTime}>
+                <TouchableOpacity 
+                  style={styles.removeMediaButton} 
+                  onPress={removeImage}
+                >
+                  <Icon name="times" size={18} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            {/* Audio Preview */}
+            {audioUri && (
+              <View style={styles.audioContainer}>
+                <TouchableOpacity onPress={isPlaying ? stopPlaying : startPlaying}>
+                  <Icon name={isPlaying ? "pause" : "play"} size={24} color="#666" />
+                </TouchableOpacity>
+                <Text style={styles.audioText}>
                   {isPlaying ? playTime : recordingTime}
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.removeAudioButton}
-                onPress={removeAudio}
+                <TouchableOpacity 
+                  style={styles.removeAudioButton}
+                  onPress={removeAudio}
+                >
+                  <Icon name="times" size={18} color="#666" />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Media Buttons */}
+            <View style={styles.mediaButtons}>
+              <TouchableOpacity 
+                style={styles.mediaButton}
+                onPress={() => setShowImageOptions(true)}
               >
-                <Icon name="times-circle" size={24} color="#666" />
+                <Icon name="image" size={20} color="#666" />
+                <Text style={styles.mediaButtonText}>Add Image</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.mediaButton, isRecording && styles.recordingButton]}
+                onPress={isRecording ? stopRecording : startRecording}
+              >
+                <Icon 
+                  name={isRecording ? "stop" : "microphone"} 
+                  size={20} 
+                  color={isRecording ? "#fff" : "#666"} 
+                />
+                <Text style={[
+                  styles.mediaButtonText,
+                  isRecording && styles.recordingText
+                ]}>
+                  {isRecording ? recordingTime : "Record Audio"}
+                </Text>
               </TouchableOpacity>
             </View>
-          )}
 
-          <View style={styles.mediaButtonsContainer}>
-            <TouchableOpacity
-              style={styles.mediaButton}
-              onPress={() => handleImageSelection('camera')}
+            {/* Pin Option */}
+            <TouchableOpacity 
+              style={styles.pinOption}
+              onPress={() => setIsPinned(!isPinned)}
             >
-              <Icon name="camera" size={20} color="#333" />
-              <Text style={styles.mediaButtonText}>Camera</Text>
+              <View style={[styles.checkbox, isPinned && styles.checkboxChecked]}>
+                {isPinned && <Icon name="check" size={14} color="#FFF" />}
+              </View>
+              <Text style={styles.pinText}>Pin to Profile</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.mediaButton}
-              onPress={() => handleImageSelection('gallery')}
-            >
-              <Icon name="image" size={20} color="#333" />
-              <Text style={styles.mediaButtonText}>Gallery</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.mediaButton, isRecording && styles.recordingButton]}
-              onPress={isRecording ? stopRecording : startRecording}
-            >
-              <Icon 
-                name={isRecording ? "stop" : "microphone"} 
-                size={20} 
-                color={isRecording ? "#fff" : "#333"} 
-              />
-              <Text style={[
-                styles.mediaButtonText,
-                isRecording && styles.recordingText
-              ]}>
-                {isRecording ? recordingTime : "Record"}
-              </Text>
-            </TouchableOpacity>
+            {/* Action Buttons */}
+            <View style={styles.actionButtons}>
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={() => navigation.goBack()}
+                disabled={loading}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.updateButton, loading && styles.updateButtonDisabled]}
+                onPress={handlePostSubmit}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.updateButtonText}>Create Post</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-          <TouchableOpacity 
-            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-            onPress={handlePostSubmit}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <Icon name="paper-plane" size={16} color="#fff" />
-                <Text style={styles.submitButtonText}>
-                  {state.selectedPage 
-                    ? `Post to ${state.userPages.find(p => p.id === state.selectedPage)?.name}`
-                    : 'Post'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      {/* Image Options Modal */}
+      <Modal
+        visible={showImageOptions}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowImageOptions(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowImageOptions(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Add Image</Text>
+              <TouchableOpacity 
+                style={styles.modalOption}
+                onPress={() => handleImageSelection('camera')}
+              >
+                <Icon name="camera" size={22} color="#b06e31" />
+                <Text style={styles.modalOptionText}>Take Photo</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.modalOption}
+                onPress={() => handleImageSelection('gallery')}
+              >
+                <Icon name="image" size={22} color="#b06e31" />
+                <Text style={styles.modalOptionText}>Choose from Gallery</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.modalCancelButton}
+                onPress={() => setShowImageOptions(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* Pages Dropdown Modal */}
+      <Modal
+        visible={showPagesDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPagesDropdown(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowPagesDropdown(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.pagesDropdown}>
+              <Text style={styles.modalTitle}>Select Destination</Text>
+              <ScrollView style={styles.pageOptionsScrollView}>
+                <TouchableOpacity
+                  style={styles.pageOption}
+                  onPress={() => {
+                    setPostType('Personal Post');
+                    setShowPagesDropdown(false);
+                  }}
+                >
+                  <Text style={styles.pageOptionText}>My Profile</Text>
+                  {postType === 'Personal Post' && (
+                    <Icon name="check" size={16} color="#b06e31" />
+                  )}
+                </TouchableOpacity>
+                
+                {userPages.map((page) => (
+                  <TouchableOpacity
+                    key={page.id}
+                    style={styles.pageOption}
+                    onPress={() => {
+                      setPostType(page.name);
+                      setShowPagesDropdown(false);
+                    }}
+                  >
+                    <Text style={styles.pageOptionText}>{page.name}</Text>
+                    {postType === page.name && (
+                      <Icon name="check" size={16} color="#b06e31" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity 
+                style={styles.modalCancelButton}
+                onPress={() => setShowPagesDropdown(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  content: {
-    padding: 16,
+  container: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    color: '#333',
+  keyboardAvoidingView: {
+    flex: 1,
   },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+  scrollView: {
+    flex: 1,
+  },
+  header: {
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9ECEF',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 2,
   },
-  dropdownRow: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 12,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+  },
+  dateText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  formContainer: {
+    padding: 16,
+  },
+  pageSelector: {
     marginBottom: 16,
   },
-  dropdownLabel: {
-    marginRight: 10,
+  pageSelectorLabel: {
     fontSize: 14,
-    color: '#333',
+    color: '#666',
+    marginBottom: 8,
     fontWeight: '500',
   },
-  dropdown: {
+  pageSelectorContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#F5F5F5',
+    padding: 14,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: '#E9ECEF',
   },
-  dropdownText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dropdownOptions: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    width: '80%',
-    maxHeight: '60%',
-    elevation: 5,
-  },
-  optionItem: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  selectedOption: {
-    backgroundColor: '#f0f0f0',
-  },
-  optionText: {
-    fontSize: 14,
-    color: '#333',
-    marginLeft: 10,
-  },
-  pageOptionImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-  },
-  loadingIndicator: {
-    padding: 16,
-  },
-  noPagesOption: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  noPagesText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 10,
-  },
-  createPageButton: {
-    backgroundColor: '#1a73e8',
-    padding: 10,
-    borderRadius: 5,
-  },
-  createPageText: {
-    color: '#fff',
-    fontSize: 14,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
+  pageSelectorText: {
     fontSize: 16,
-    minHeight: 120,
-    textAlignVertical: 'top',
-    marginBottom: 16,
     color: '#333',
   },
-  previewContainer: {
+  inputContainer: {
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#DEE2E6',
     marginBottom: 16,
-    borderRadius: 8,
-    overflow: 'hidden',
-    position: 'relative',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
   },
-  previewImage: {
+  contentInput: {
+    height: 150,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#212529',
+    textAlignVertical: 'top',
+  },
+  imageContainer: {
+    marginBottom: 16,
+    borderRadius: 10,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  imagePreview: {
     width: '100%',
     height: 200,
-    borderRadius: 8,
   },
   removeMediaButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    width: 32,
+    height: 32,
     borderRadius: 16,
-    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  audioPreviewContainer: {
+  audioContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#f5f5f5',
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+    padding: 14,
+    borderRadius: 10,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
   },
-  playButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  playTime: {
-    marginLeft: 8,
-    color: '#666',
+  audioText: {
+    marginLeft: 12,
+    flex: 1,
     fontSize: 14,
+    color: '#666',
   },
   removeAudioButton: {
-    padding: 4,
+    padding: 8,
   },
-  mediaButtonsContainer: {
+  mediaButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   mediaButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f5f5f5',
-    padding: 12,
+    backgroundColor: '#FFF',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 8,
-    marginHorizontal: 4,
-  },
-  mediaButtonText: {
-    marginLeft: 8,
-    color: '#333',
-    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#DEE2E6',
+    flex: 0.48,
+    justifyContent: 'center',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
   },
   recordingButton: {
     backgroundColor: '#ff4444',
@@ -957,22 +891,155 @@ const styles = StyleSheet.create({
   recordingText: {
     color: '#fff',
   },
-  submitButton: {
-    backgroundColor: '#1a73e8',
+  mediaButtonText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#495057',
+    fontWeight: '500',
+  },
+  pinOption: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 24,
+    paddingVertical: 6,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#ADB5BD',
+    marginRight: 12,
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 8,
+    alignItems: 'center',
   },
-  submitButtonDisabled: {
-    backgroundColor: '#a0c3ff',
+  checkboxChecked: {
+    backgroundColor: '#b06e31',
+    borderColor: '#b06e31',
   },
-  submitButtonText: {
-    color: '#fff',
+  pinText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
+    color: '#495057',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 10,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#DEE2E6',
+    paddingVertical: 14,
+    alignItems: 'center',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: '#495057',
+    fontWeight: '500',
+  },
+  updateButton: {
+    flex: 1,
+    backgroundColor: '#b06e31',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  updateButtonDisabled: {
+    backgroundColor: '#d8a980',
+  },
+  updateButtonText: {
+    fontSize: 16,
+    color: '#FFF',
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    width: '85%',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalOptionText: {
+    marginLeft: 16,
+    fontSize: 16,
+    color: '#333',
+  },
+  modalCancelButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    backgroundColor: '#F5F5F5',
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  pagesDropdown: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    width: '85%',
+    maxHeight: '70%',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  pageOptionsScrollView: {
+    maxHeight: 300,
+  },
+  pageOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  pageOptionText: {
+    fontSize: 16,
+    color: '#333',
   },
 });
 

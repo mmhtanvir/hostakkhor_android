@@ -16,6 +16,7 @@ interface ShareModalProps {
   onClose: () => void;
   post: {
     id: string;
+    path: string; // Add path to properly identify the post
     content: string;
     author?: {
       name: string;
@@ -28,15 +29,23 @@ const ShareModal: React.FC<ShareModalProps> = ({
   onClose, 
   post
 }) => {
-  // Generate the post URL based on the post ID
+  // Generate the post URL using the post's path
   const getPostUrl = () => {
-    return `https://hostakkhor.com/posts/${post.id}`;
+    // Using the post's path to generate the correct URL
+    // The path format is typically: hostakkhor_posts_${postId}
+    const postPath = post.path.replace('hostakkhor_posts_', '');
+    return `https://hostakkhor.com/post/${postPath}`;
   };
 
-  // Generate share text including author if available
   const getShareText = () => {
-    const authorText = post.author?.name ? ` by ${post.author.name}` : '';
-    return `${post.content}${authorText}\n\nShared from Hostakkhor`;
+    // Limit content length for sharing
+    const maxLength = 100;
+    const content = post.content.length > maxLength 
+      ? post.content.substring(0, maxLength) + '...' 
+      : post.content;
+    
+    const authorText = post.author?.name ? ` - ${post.author.name}` : '';
+    return `${content}${authorText}\n\nRead more on Hostakkhor`;
   };
 
   const handleShare = async (platform: 'facebook' | 'twitter' | 'whatsapp' | 'native') => {
@@ -45,15 +54,19 @@ const ShareModal: React.FC<ShareModalProps> = ({
 
     if (platform === 'native') {
       try {
-        await Share.share({
-          message: shareText,
+        const result = await Share.share({
+          message: `${shareText}\n${postUrl}`,
           url: postUrl, // iOS only
+          title: 'Share Post', // Android only
         });
-        return;
+        
+        if (result.action === Share.sharedAction) {
+          onClose(); // Close modal after successful share
+        }
       } catch (error) {
         console.error('Error sharing:', error);
-        return;
       }
+      return;
     }
 
     let appUrl = '';
@@ -62,21 +75,25 @@ const ShareModal: React.FC<ShareModalProps> = ({
     switch (platform) {
       case 'facebook':
         appUrl = `fb://facewebmodal/f?href=${encodeURIComponent(postUrl)}`;
-        fallbackUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(postUrl)}`;
+        fallbackUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(postUrl)}&quote=${encodeURIComponent(shareText)}`;
         break;
       case 'twitter':
-        appUrl = `twitter://post?message=${encodeURIComponent(shareText)}`;
+        // Twitter has a character limit, so we'll need to be more concise
+        const twitterText = `${post.content.substring(0, 80)}... ${postUrl}`;
+        appUrl = `twitter://post?message=${encodeURIComponent(twitterText)}`;
         fallbackUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(postUrl)}&text=${encodeURIComponent(shareText)}`;
         break;
       case 'whatsapp':
-        appUrl = `whatsapp://send?text=${encodeURIComponent(shareText + ' ' + postUrl)}`;
-        fallbackUrl = `https://wa.me/?text=${encodeURIComponent(shareText + ' ' + postUrl)}`;
+        const whatsappText = `${shareText}\n${postUrl}`;
+        appUrl = `whatsapp://send?text=${encodeURIComponent(whatsappText)}`;
+        fallbackUrl = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`;
         break;
     }
 
     try {
       const supported = await Linking.canOpenURL(appUrl);
       await Linking.openURL(supported ? appUrl : fallbackUrl);
+      onClose(); // Close modal after opening share URL
     } catch (error) {
       console.error('Error opening share link:', error);
       // Fallback to native share if platform-specific sharing fails
@@ -99,7 +116,13 @@ const ShareModal: React.FC<ShareModalProps> = ({
         <View style={styles.modal}>
           <View style={styles.handle} />
           
-          <Text style={styles.title}>Share this Post</Text>
+          <Text style={styles.title}>Share Post</Text>
+          
+          <View style={styles.contentPreview}>
+            <Text style={styles.previewText} numberOfLines={2}>
+              {post.content}
+            </Text>
+          </View>
           
           <View style={styles.iconsRow}>
             <TouchableOpacity
@@ -218,6 +241,20 @@ const styles = StyleSheet.create({
     color: '#666',
     fontWeight: '500',
   },
+  // ... (previous styles remain the same)
+  contentPreview: {
+    width: '100%',
+    backgroundColor: '#F5F5F5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  previewText: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+  },
+  // ... (rest of the styles remain the same)
 });
 
 export default ShareModal;

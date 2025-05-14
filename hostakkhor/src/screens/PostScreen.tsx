@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, useIsFocused } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
+import ShareModal from '../components/shareModal';
 import { format } from 'date-fns';
 import { utcToZonedTime } from 'date-fns-tz';
 import AudioPlayer from '../components/AudioPlayer';
@@ -66,6 +67,7 @@ const PostDetailsScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isSharing, setIsSharing] = useState(false);
   const [currentAudioPlaying, setCurrentAudioPlaying] = useState<string | null>(null);
+  const [isShareModalVisible, setIsShareModalVisible] = useState(false);
 
   useEffect(() => {
     fetchPostDetails();
@@ -278,13 +280,17 @@ const formatDate = (timestamp: number): string => {
                     </Text>
                   </View>
                 </View>
-                <TouchableOpacity
-                  style={styles.shareButton}
-                  onPress={handleShare}
-                  disabled={isSharing}
-                >
-                  <Icon name="share-2" size={20} color="#6B7280" />
-                </TouchableOpacity>
+      <TouchableOpacity onPress={() => setIsShareModalVisible(true)}>
+        <Icon name="share-2" size={24} color="#666" />
+      </TouchableOpacity>
+
+      {post && (
+        <ShareModal
+          visible={isShareModalVisible}
+          onClose={() => setIsShareModalVisible(false)}
+          post={post}
+        />
+      )}
               </View>
 
               {/* Content */}
