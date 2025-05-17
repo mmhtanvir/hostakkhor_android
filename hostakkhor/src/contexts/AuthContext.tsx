@@ -145,7 +145,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       // Generate or use existing internal ID
       const internalId = internalUser?.id || generateUniqueId();
+<<<<<<< HEAD
       const userPath = `hostakkhor_users_${internalId}`;
+=======
+      const userPath = `hostakkhor_users_${ssoUserData.email.replace('@', '-').replace('.', '-')}`;
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
       
       // Combine both profiles, ensuring we keep both IDs and all necessary fields
       const combinedUserData: IUser = {
@@ -158,7 +162,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         created_at: internalUser?.created_at || Date.now(),
         updated_at: Date.now(),
         path: userPath,
+<<<<<<< HEAD
         bio: internalUser?.bio,
+=======
+        bio: internalUser?.bio || "My world",
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
         pinnedPostTheme: internalUser?.pinnedPostTheme || "default",
         onboardingCompleted: internalUser?.onboardingCompleted || false,
         role: 'user'

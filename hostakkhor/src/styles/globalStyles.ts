@@ -721,7 +721,10 @@ export const globalStyles = StyleSheet.create({
     borderRadius: 36,
     marginBottom: 10,
   },
+<<<<<<< HEAD
   
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   profileEmail: {
     fontSize: 13,
     color: '#666',
@@ -828,11 +831,14 @@ export const globalStyles = StyleSheet.create({
     color: '#000',
   },
 
+<<<<<<< HEAD
   postContent: {
     fontSize: 14,
     lineHeight: 20,
   },
 
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   // User Posts Section
   userPostsSection: {
     marginTop: 24,

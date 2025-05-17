@@ -233,6 +233,15 @@ const EditPage = () => {
 
   return (
     <View style={styles.container}>
+<<<<<<< HEAD
+=======
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Icon name="arrow-left" size={24} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Edit Page</Text>
+      </View>
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
       
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.card}>

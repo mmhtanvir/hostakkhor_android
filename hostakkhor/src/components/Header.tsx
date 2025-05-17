@@ -7,7 +7,10 @@ import {
   Text,
   ActivityIndicator,
 } from 'react-native';
+<<<<<<< HEAD
 import Icon from 'react-native-vector-icons/FontAwesome';
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
 import { useNavigation } from '@react-navigation/native';
 import { SvgUri } from 'react-native-svg';
 import { Svg, Path } from 'react-native-svg';
@@ -15,6 +18,7 @@ import { globalStyles } from '../styles/globalStyles';
 import { useAuth } from '../contexts/AuthContext';
 
 // Default fallback profile image
+<<<<<<< HEAD
 const DefaultProfileImage = ({ size }) => (
   <View 
     style={[
@@ -25,6 +29,20 @@ const DefaultProfileImage = ({ size }) => (
     ]}
   >
     <Icon name="user" size={size === 'small' ? 10 : 20} color="#888" />
+=======
+const DefaultProfileImage = () => (
+  <View
+    style={[
+      globalStyles.profileButton,
+      {
+        backgroundColor: '#e1e1e1',
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+    ]}
+  >
+    <Text style={{ fontSize: 16, color: '#888' }}>?</Text>
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   </View>
 );
 

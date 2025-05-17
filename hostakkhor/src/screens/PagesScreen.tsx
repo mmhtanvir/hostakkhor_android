@@ -54,11 +54,17 @@ export interface IPost {
 
 const { width } = Dimensions.get('window');
 
+<<<<<<< HEAD
 const DefaultPageImage = ({ name }: { name?: string }) => (
   <View style={styles.avatarContainer}>
     <Text style={styles.avatarText}>
       {name && name.length > 0 ? name[0].toUpperCase() : 'P'}
     </Text>
+=======
+const DefaultPageImage = () => (
+  <View style={styles.avatarContainer}>
+    <Text style={styles.avatarText}>P</Text>
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   </View>
 );
 
@@ -90,7 +96,11 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
       setLoading(true);
       setError(null);
       const url = `https://proxy.hostakkhor.com/proxy/getsorted?keys=hostakkhor_pages_${pageId}`;
+<<<<<<< HEAD
       // console.log('Fetching page data from:', url);
+=======
+      console.log('Fetching page data from:', url);
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
       
       const response = await fetch(url);
       if (!response.ok) {
@@ -98,7 +108,11 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
       }
       
       const data = await response.json();
+<<<<<<< HEAD
       // console.log('Raw response:', data);
+=======
+      console.log('Raw response:', data);
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
       
       if (data?.result?.[0]?.value) {
         setPageInfo(data.result[0].value);
@@ -107,7 +121,11 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
         throw new Error('No page data found');
       }
     } catch (error) {
+<<<<<<< HEAD
       // console.error('Failed to fetch page info:', error);
+=======
+      console.error('Failed to fetch page info:', error);
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
       setError('Failed to load page information. Please try again.');
     } finally {
       setLoading(false);
@@ -118,7 +136,11 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
     try {
       setPostsLoading(true);
       const url = `https://proxy.hostakkhor.com/proxy/getsorted?keys=hostakkhor_posts_*&skip=0&limit=1000`;
+<<<<<<< HEAD
       // console.log('Fetching page posts from:', url);
+=======
+      console.log('Fetching page posts from:', url);
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
       
       const response = await fetch(url);
       if (!response.ok) {
@@ -126,7 +148,11 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
       }
       
       const data = await response.json();
+<<<<<<< HEAD
       // console.log('Raw posts response:', data);
+=======
+      console.log('Raw posts response:', data);
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
       
       if (data?.result && Array.isArray(data.result)) {
         const posts = data.result
@@ -137,6 +163,7 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
           })
           .sort((a: IPost, b: IPost) => b.created_at - a.created_at);
         
+<<<<<<< HEAD
         // console.log('Filtered page posts:', posts);
         setPagePosts(posts);
       } else {
@@ -145,6 +172,16 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
       }
     } catch (error) {
       // console.error('Failed to fetch page posts:', error);
+=======
+        console.log('Filtered page posts:', posts);
+        setPagePosts(posts);
+      } else {
+        console.error('Unexpected posts response structure:', data);
+        setPagePosts([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch page posts:', error);
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
       setError('Failed to load page posts. Please try again.');
     } finally {
       setPostsLoading(false);
@@ -167,7 +204,11 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
             try {
               setLoading(true);
               const url = `https://proxy.hostakkhor.com/proxy/remove?key=hostakkhor_pages_${pageId}`;
+<<<<<<< HEAD
               // console.log('Deleting page data with URL:', url);
+=======
+              console.log('Deleting page data with URL:', url);
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
 
               const response = await fetch(url, { method: 'GET' });
               if (!response.ok) {
@@ -175,7 +216,11 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
               }
 
               const result = await response.json();
+<<<<<<< HEAD
               // console.log('Delete response:', result);
+=======
+              console.log('Delete response:', result);
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
 
               if (result.result === 1) {
                 Alert.alert('Success', 'Page deleted successfully.');
@@ -184,7 +229,11 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
                 throw new Error('Failed to delete the page.');
               }
             } catch (error) {
+<<<<<<< HEAD
               // console.error('Delete error:', error);
+=======
+              console.error('Delete error:', error);
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
               Alert.alert('Error', 'Failed to delete the page. Please try again.');
             } finally {
               setLoading(false);
@@ -202,7 +251,11 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
       const date = new Date(timestamp);
       return `${date.getDate()} ${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
     } catch (error) {
+<<<<<<< HEAD
       // console.error('Date formatting error:', error);
+=======
+      console.error('Date formatting error:', error);
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
       return 'Invalid date';
     }
   };
@@ -288,9 +341,12 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
     );
   }
 
+<<<<<<< HEAD
   // Decide what to show for avatar: show image if exists and no error, otherwise first letter of name
   const showAvatarImage = pageInfo.avatar && !imageError;
 
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   return (
     <View style={styles.container}>
       <ScrollView 
@@ -302,16 +358,32 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
           />
         }
       >
+<<<<<<< HEAD
 
         {/* Page Header */}
         <View style={styles.pageHeader}>
           {showAvatarImage ? (
+=======
+        {/* Back Button */}
+        <TouchableOpacity 
+          style={styles.backButtonContainer}
+          onPress={() => navigation.goBack()}
+        >
+          <Icon name="arrow-left" size={16} color="#000" />
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
+
+        {/* Page Header */}
+        <View style={styles.pageHeader}>
+          {pageInfo.avatar && !imageError ? (
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
             <Image 
               source={{ uri: pageInfo.avatar }}
               style={styles.avatar}
               onError={() => setImageError(true)}
             />
           ) : (
+<<<<<<< HEAD
             <DefaultPageImage name={pageInfo.name} />
           )}
           <Text style={styles.pageTitle}>{pageInfo.name || 'Page Title'}</Text>
@@ -325,6 +397,12 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
             <Icon name="plus" size={16} color="#fff" />
             <Text style={styles.createPostButtonText}>Create Post</Text>
           </TouchableOpacity>
+=======
+            <DefaultPageImage />
+          )}
+          <Text style={styles.pageTitle}>{pageInfo.name || 'Page Title'}</Text>
+          <Text style={styles.dateText}>Created {formatDate(pageInfo.created_at)}</Text>
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
         </View>
 
         {/* About Section */}
@@ -334,6 +412,7 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
         </View>
 
         {/* Action Buttons */}
+<<<<<<< HEAD
         <View style={styles.actionButtonsContainer}>
           <TouchableOpacity style={styles.actionButton}>
             <Icon name="copy" size={16} color="#374151" />
@@ -355,6 +434,29 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
             <Text style={styles.deleteButtonText}>Delete Page</Text>
           </TouchableOpacity>
         </View>
+=======
+<View style={styles.actionButtonsContainer}>
+  <TouchableOpacity style={styles.actionButton}>
+    <Icon name="copy" size={16} color="#374151" />
+    <Text style={styles.actionButtonText}>Copy Link</Text>
+  </TouchableOpacity>
+  <TouchableOpacity style={styles.actionButton}>
+    <Icon name="share-alt" size={16} color="#374151" />
+    <Text style={styles.actionButtonText}>Share Page</Text>
+  </TouchableOpacity>
+  <TouchableOpacity 
+    style={styles.actionButton}
+    onPress={() => navigation.navigate('EditPage', { pageId: pageId })}
+  >
+    <Icon name="pencil" size={16} color="#374151" />
+    <Text style={styles.actionButtonText}>Edit Page</Text>
+  </TouchableOpacity>
+  <TouchableOpacity style={styles.actionButton} onPress={handleDelete}>
+    <Icon name="trash" size={16} color="#DC2626" />
+    <Text style={styles.deleteButtonText}>Delete Page</Text>
+  </TouchableOpacity>
+</View>
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
 
         {/* Tabs */}
         <View style={styles.tabsContainer}>
@@ -414,7 +516,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     backgroundColor: '#FFFFFF',
+<<<<<<< HEAD
     position: 'relative',
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   },
   avatar: {
     width: 100,
@@ -429,7 +534,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
     justifyContent: 'center',
     alignItems: 'center',
+<<<<<<< HEAD
     marginBottom: 16,
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   },
   avatarText: {
     fontSize: 40,
@@ -445,6 +553,7 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 14,
     color: '#6B7280',
+<<<<<<< HEAD
     marginBottom: 8,
   },
   createPostButton: {
@@ -461,6 +570,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 8,
     fontWeight: '500',
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   },
   sectionContainer: {
     padding: 16,

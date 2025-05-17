@@ -34,7 +34,11 @@ const ShareModal: React.FC<ShareModalProps> = ({
     // Using the post's path to generate the correct URL
     // The path format is typically: hostakkhor_posts_${postId}
     const postPath = post.path.replace('hostakkhor_posts_', '');
+<<<<<<< HEAD
     return `https://web.hostakkhor.com/post/${postPath}`;
+=======
+    return `https://hostakkhor.com/post/${postPath}`;
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   };
 
   const getShareText = () => {
@@ -173,6 +177,10 @@ const ShareModal: React.FC<ShareModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
+<<<<<<< HEAD
+=======
+    backgroundColor: 'rgba(0,0,0,0.4)',
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
     justifyContent: 'flex-end',
   },
   modal: {

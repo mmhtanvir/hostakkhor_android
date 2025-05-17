@@ -273,6 +273,19 @@ const EditPostScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+<<<<<<< HEAD
+=======
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Icon name="arrow-left" size={20} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Edit Post</Text>
+        </View>
+        <Text style={styles.dateText}>{currentDate}</Text>
+      </View>
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
 
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

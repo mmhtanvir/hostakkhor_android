@@ -6,7 +6,11 @@ export type RootStackParamList = {
   Home: undefined;
   Profile: { userId: string };
   EditProfile: { userId: string };
+<<<<<<< HEAD
   Pages: { pageId: string }; 
+=======
+  pages: { pageId: string }; 
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   EditPage: { pageId: string };
   CreatePost: undefined;
   CreatePage: undefined;

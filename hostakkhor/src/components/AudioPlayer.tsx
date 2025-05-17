@@ -10,7 +10,10 @@ import {
 } from 'react-native';
 import AudioRecorderPlayer from 'react-native-audio-recorder-player';
 import Icon from 'react-native-vector-icons/Feather';
+<<<<<<< HEAD
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
 
 interface AudioPlayerProps {
   audioUrl: string;
@@ -19,6 +22,7 @@ interface AudioPlayerProps {
   isScreenFocused: boolean;
   currentlyPlaying: boolean;
   onPlayStateChange: (isPlaying: boolean) => void;
+<<<<<<< HEAD
   // Multiple tracks props
   totalTracks?: number;
   currentTrackNumber?: number;
@@ -27,6 +31,8 @@ interface AudioPlayerProps {
   // Optional style props
   compact?: boolean;
   inPostCard?: boolean; // New prop to style specifically for PostCard
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
 }
 
 const AudioPlayer: React.FC<AudioPlayerProps> = ({
@@ -36,12 +42,15 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   isScreenFocused,
   currentlyPlaying,
   onPlayStateChange,
+<<<<<<< HEAD
   totalTracks = 1,
   currentTrackNumber = 1,
   onPreviousTrack,
   onNextTrack,
   compact = false,
   inPostCard = false, // Default to false
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentPositionSec, setCurrentPositionSec] = useState(0);
@@ -49,9 +58,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const progressWidth = useRef(new Animated.Value(0)).current;
   const audioRecorderPlayer = useRef(new AudioRecorderPlayer()).current;
+<<<<<<< HEAD
   
   // Calculate if we need to show track navigation
   const hasMultipleTracks = totalTracks > 1;
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
 
   useEffect(() => {
     if (!isScreenFocused && isPlaying) {
@@ -116,6 +128,10 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
         onPlayStateChange(false);
       } else {
         if (currentPositionSec === 0) {
+<<<<<<< HEAD
+=======
+          console.log('Starting playback for:', audioUrl);
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
           await audioRecorderPlayer.startPlayer(audioUrl);
           audioRecorderPlayer.addPlayBackListener((e) => {
             if (e.currentPosition === e.duration) {
@@ -153,6 +169,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   };
 
+<<<<<<< HEAD
   // Handle seeking directly by tapping on the seekbar
   const handleSeekTap = async (event) => {
     if (currentDurationSec === 0) return;
@@ -170,10 +187,13 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   };
 
   // Only show mm:ss, no microseconds or tenths
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   const formatTime = (milliseconds: number): string => {
     const totalSeconds = Math.floor(milliseconds / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
+<<<<<<< HEAD
     return `${minutes.toString().padStart(2, '0')}:${seconds
       .toString()
       .padStart(2, '0')}`;
@@ -323,6 +343,16 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
               </TouchableOpacity>
             )}
             
+=======
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.playerContent}>
+        <View style={styles.controlsRow}>
+          <View style={styles.controls}>
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
             <TouchableOpacity 
               style={[styles.playButton, isLoading && styles.buttonDisabled]}
               onPress={onPlayPause}
@@ -335,6 +365,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
               />
             </TouchableOpacity>
             
+<<<<<<< HEAD
             {hasMultipleTracks && (
               <TouchableOpacity
                 style={styles.trackNavButton}
@@ -350,6 +381,11 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 />
               </TouchableOpacity>
             )}
+=======
+            <Text style={styles.audioLabel}>
+              Audio {index + 1}
+            </Text>
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
           </View>
 
           <Text style={styles.timeText}>
@@ -357,10 +393,14 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
           </Text>
         </View>
 
+<<<<<<< HEAD
         <TouchableOpacity 
           style={styles.progressBarContainer}
           onPress={handleSeekTap}
         >
+=======
+        <View style={styles.progressBarContainer}>
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
           <Animated.View 
             style={[
               styles.progressBar,
@@ -372,13 +412,18 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
               },
             ]} 
           />
+<<<<<<< HEAD
         </TouchableOpacity>
+=======
+        </View>
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+<<<<<<< HEAD
   // PostCard player specific styles
   postCardPlayerContainer: {
     flexDirection: 'row',
@@ -420,6 +465,8 @@ const styles = StyleSheet.create({
   },
 
   // Original styles
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   container: {
     backgroundColor: '#B45309',
     borderRadius: 8,
@@ -429,6 +476,7 @@ const styles = StyleSheet.create({
   playerContent: {
     width: '100%',
   },
+<<<<<<< HEAD
   trackInfoContainer: {
     alignItems: 'center',
     marginBottom: 4,
@@ -438,6 +486,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.8,
   },
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -457,11 +507,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+<<<<<<< HEAD
   trackNavButton: {
     padding: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   buttonDisabled: {
     opacity: 0.5,
   },
@@ -486,6 +539,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 2,
   },
+<<<<<<< HEAD
   
   // Compact styles for PostCard integration
   compactContainer: {
@@ -535,6 +589,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#8B4F17',
   },
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
 });
 
 export default AudioPlayer;

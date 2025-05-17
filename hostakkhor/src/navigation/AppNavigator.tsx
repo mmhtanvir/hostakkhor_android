@@ -99,7 +99,11 @@ const AppNavigator = () => {
         options={{ title: 'Edit Post' }} 
       />
       <Stack.Screen 
+<<<<<<< HEAD
         name="Pages" 
+=======
+        name="pages" 
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
         component={PagesScreen}
         options={{ title: 'Page Details' }} 
       />

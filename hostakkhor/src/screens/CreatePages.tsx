@@ -233,7 +233,11 @@ const CreatePage = () => {
       Alert.alert('Success', 'Page created successfully!', [
         {
           text: 'OK',
+<<<<<<< HEAD
           onPress: () => navigation.navigate('Pages', { pageId: pageId })
+=======
+          onPress: () => navigation.navigate('Pages' as never)
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
         }
       ]);
     } catch (error) {
@@ -248,6 +252,10 @@ const CreatePage = () => {
     <View style={globalStyles.container}>
       <Header showProfile={true} profileImageUrl={user?.profileImageUrl} />
       <ScrollView contentContainerStyle={styles.content}>
+<<<<<<< HEAD
+=======
+        <Text style={styles.title}>Create a Page</Text>
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Page Details</Text>
 

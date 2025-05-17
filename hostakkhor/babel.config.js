@@ -7,6 +7,9 @@ module.exports = {
       safe: false,
       allowUndefined: true,
     }],
+<<<<<<< HEAD
     'react-native-reanimated/plugin', // MUST BE LAST
+=======
+>>>>>>> 766e8da14fcdb46a5ff8e3d57f8326556edce013
   ],
 };
