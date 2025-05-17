@@ -1,0 +1,3 @@
+6. Fix the seekbar functionality in the audio player
+7. Verify and fix Google login
+14. at home page remove categories and add filter by alphabet similar to website
