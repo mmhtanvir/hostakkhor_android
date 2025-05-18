@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,15 +8,18 @@ import {
   Linking,
   Platform,
   Share,
+  Alert,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
+import FeatherIcon from 'react-native-vector-icons/Feather';
+import FontAwesome from 'react-native-vector-icons/FontAwesome';
+// No need for MaterialCommunityIcons for WhatsApp here
 
 interface ShareModalProps {
   visible: boolean;
   onClose: () => void;
   post: {
     id: string;
-    path: string; // Add path to properly identify the post
+    path: string;
     content: string;
     author?: {
       name: string;
@@ -24,31 +27,33 @@ interface ShareModalProps {
   };
 }
 
-const ShareModal: React.FC<ShareModalProps> = ({ 
-  visible, 
-  onClose, 
-  post
+const ShareModal: React.FC<ShareModalProps> = ({
+  visible,
+  onClose,
+  post,
 }) => {
+  const [copied, setCopied] = useState(false);
+
   // Generate the post URL using the post's path
   const getPostUrl = () => {
-    // Using the post's path to generate the correct URL
-    // The path format is typically: hostakkhor_posts_${postId}
     const postPath = post.path.replace('hostakkhor_posts_', '');
     return `https://web.hostakkhor.com/post/${postPath}`;
   };
 
   const getShareText = () => {
-    // Limit content length for sharing
     const maxLength = 100;
-    const content = post.content.length > maxLength 
-      ? post.content.substring(0, maxLength) + '...' 
-      : post.content;
-    
+    const content =
+      post.content.length > maxLength
+        ? post.content.substring(0, maxLength) + '...'
+        : post.content;
+
     const authorText = post.author?.name ? ` - ${post.author.name}` : '';
     return `${content}${authorText}\n\nRead more on Hostakkhor`;
   };
 
-  const handleShare = async (platform: 'facebook' | 'twitter' | 'whatsapp' | 'native') => {
+  const handleShare = async (
+    platform: 'facebook' | 'twitter' | 'whatsapp' | 'native'
+  ) => {
     const postUrl = getPostUrl();
     const shareText = getShareText();
 
@@ -56,12 +61,12 @@ const ShareModal: React.FC<ShareModalProps> = ({
       try {
         const result = await Share.share({
           message: `${shareText}\n${postUrl}`,
-          url: postUrl, // iOS only
-          title: 'Share Post', // Android only
+          url: postUrl,
+          title: 'Share Post',
         });
-        
+
         if (result.action === Share.sharedAction) {
-          onClose(); // Close modal after successful share
+          onClose();
         }
       } catch (error) {
         console.error('Error sharing:', error);
@@ -75,13 +80,16 @@ const ShareModal: React.FC<ShareModalProps> = ({
     switch (platform) {
       case 'facebook':
         appUrl = `fb://facewebmodal/f?href=${encodeURIComponent(postUrl)}`;
-        fallbackUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(postUrl)}&quote=${encodeURIComponent(shareText)}`;
+        fallbackUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+          postUrl
+        )}&quote=${encodeURIComponent(shareText)}`;
         break;
       case 'twitter':
-        // Twitter has a character limit, so we'll need to be more concise
         const twitterText = `${post.content.substring(0, 80)}... ${postUrl}`;
         appUrl = `twitter://post?message=${encodeURIComponent(twitterText)}`;
-        fallbackUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(postUrl)}&text=${encodeURIComponent(shareText)}`;
+        fallbackUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(
+          postUrl
+        )}&text=${encodeURIComponent(shareText)}`;
         break;
       case 'whatsapp':
         const whatsappText = `${shareText}\n${postUrl}`;
@@ -93,12 +101,22 @@ const ShareModal: React.FC<ShareModalProps> = ({
     try {
       const supported = await Linking.canOpenURL(appUrl);
       await Linking.openURL(supported ? appUrl : fallbackUrl);
-      onClose(); // Close modal after opening share URL
+      onClose();
     } catch (error) {
       console.error('Error opening share link:', error);
-      // Fallback to native share if platform-specific sharing fails
       handleShare('native');
     }
+  };
+
+  const handleCopy = () => {
+    const postUrl = getPostUrl();
+    // @ts-ignore
+    import('@react-native-clipboard/clipboard').then(Clipboard => {
+      Clipboard.default.setString(postUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+      Alert.alert('Copied!', 'Post URL copied to clipboard.');
+    });
   };
 
   return (
@@ -108,36 +126,55 @@ const ShareModal: React.FC<ShareModalProps> = ({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <TouchableOpacity 
-        style={styles.overlay} 
-        activeOpacity={1} 
+      <TouchableOpacity
+        style={styles.overlay}
+        activeOpacity={1}
         onPress={onClose}
       >
-        <View style={styles.modal}>
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.modal}
+          onPress={() => {}}
+        >
           <View style={styles.handle} />
-          
+
           <Text style={styles.title}>Share Post</Text>
-          
-          <View style={styles.contentPreview}>
-            <Text style={styles.previewText} numberOfLines={2}>
-              {post.content}
+
+          <TouchableOpacity
+            style={styles.copyLinkButton}
+            onPress={handleCopy}
+            activeOpacity={0.7}
+          >
+            <FeatherIcon
+              name="copy"
+              size={20}
+              color={copied ? "#B35F24" : "#555"}
+              style={{ marginRight: 8 }}
+            />
+            <Text
+              style={[
+                styles.copyLinkText,
+                copied && { color: "#B35F24" }
+              ]}
+            >
+              {copied ? "Copied!" : "Copy Post URL"}
             </Text>
-          </View>
-          
+          </TouchableOpacity>
+
           <View style={styles.iconsRow}>
             <TouchableOpacity
               style={[styles.shareButton, { backgroundColor: '#1877F2' }]}
               onPress={() => handleShare('facebook')}
             >
-              <Icon name="facebook" size={24} color="#FFF" />
+              <FontAwesome name="facebook" size={28} color="#FFF" />
               <Text style={styles.shareButtonText}>Facebook</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.shareButton, { backgroundColor: '#000000' }]}
+              style={[styles.shareButton, { backgroundColor: '#1DA1F2' }]}
               onPress={() => handleShare('twitter')}
             >
-              <Icon name="twitter" size={24} color="#FFF" />
+              <FontAwesome name="twitter" size={28} color="#FFF" />
               <Text style={styles.shareButtonText}>Twitter</Text>
             </TouchableOpacity>
 
@@ -145,7 +182,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
               style={[styles.shareButton, { backgroundColor: '#25D366' }]}
               onPress={() => handleShare('whatsapp')}
             >
-              <Icon name="message-circle" size={24} color="#FFF" />
+              <FontAwesome name="whatsapp" size={28} color="#FFF" />
               <Text style={styles.shareButtonText}>WhatsApp</Text>
             </TouchableOpacity>
 
@@ -153,18 +190,15 @@ const ShareModal: React.FC<ShareModalProps> = ({
               style={[styles.shareButton, { backgroundColor: '#666666' }]}
               onPress={() => handleShare('native')}
             >
-              <Icon name="share-2" size={24} color="#FFF" />
+              <FeatherIcon name="share-2" size={28} color="#FFF" />
               <Text style={styles.shareButtonText}>More</Text>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity 
-            style={styles.cancelButton}
-            onPress={onClose}
-          >
+          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
   );
@@ -179,13 +213,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 16,
+    padding: 20,
     alignItems: 'center',
+    minHeight: 320,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.10,
         shadowRadius: 8,
       },
       android: {
@@ -195,23 +230,41 @@ const styles = StyleSheet.create({
   },
   handle: {
     width: 40,
-    height: 4,
+    height: 5,
     backgroundColor: '#DDD',
-    borderRadius: 2,
-    marginBottom: 16,
+    borderRadius: 2.5,
+    marginBottom: 18,
   },
   title: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: '700',
+    color: '#222',
     marginBottom: 24,
+    letterSpacing: 0.5,
+  },
+  copyLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EEE',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    backgroundColor: '#F8F8F8',
+  },
+  copyLinkText: {
+    fontSize: 15,
+    color: '#555',
+    fontWeight: '500',
   },
   iconsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    paddingHorizontal: 16,
-    marginBottom: 24,
+    paddingHorizontal: 8,
+    marginBottom: 28,
   },
   shareButton: {
     flexDirection: 'column',
@@ -220,13 +273,17 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 16,
-    padding: 12,
+    padding: 10,
+    marginHorizontal: 2,
+    marginVertical: 4,
   },
   shareButtonText: {
     color: '#FFF',
     fontSize: 12,
     marginTop: 8,
     textAlign: 'center',
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   cancelButton: {
     width: '100%',
@@ -238,22 +295,8 @@ const styles = StyleSheet.create({
   cancelText: {
     fontSize: 16,
     color: '#666',
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  // ... (previous styles remain the same)
-  contentPreview: {
-    width: '100%',
-    backgroundColor: '#F5F5F5',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  previewText: {
-    fontSize: 14,
-    color: '#333',
-    lineHeight: 20,
-  },
-  // ... (rest of the styles remain the same)
 });
 
 export default ShareModal;

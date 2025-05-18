@@ -31,6 +31,7 @@ const HomeScreen = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filter, setFilter] = useState<string>('All');
+  const [authorLetterFilter, setAuthorLetterFilter] = useState<string>('All'); // <-- NEW
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [page, setPage] = useState<number>(0);
   const [hasMore, setHasMore] = useState<boolean>(true);
@@ -129,16 +130,33 @@ const HomeScreen = () => {
     }
   }, [loading, loadingMore, hasMore]);
 
-  const filteredPosts = posts.filter(post => {
-    const matchesSearch = 
-      (post.author?.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      post.content?.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesFilter = filter === 'All' || post.category === filter;
-    return matchesSearch && matchesFilter;
-  });
-
+  // Category filter
   const categories = ['All', ...new Set(posts.map(post => post.category).filter(Boolean))];
 
+  // Author letter filter
+  const authorLetterCategories = [
+    'All',
+    ...Array.from(
+      new Set(
+        posts
+          .map(post => post.author?.name?.[0]?.toUpperCase())
+          .filter(Boolean)
+      )
+    ).sort()
+  ];
+
+  const filteredPosts = posts.filter(post => {
+    const matchesSearch =
+      (post.author?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        post.content?.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesFilter = filter === 'All' || post.category === filter;
+    const matchesAuthorLetter =
+      authorLetterFilter === 'All' ||
+      (post.author?.name?.[0]?.toUpperCase() === authorLetterFilter);
+    return matchesSearch && matchesFilter && matchesAuthorLetter;
+  });
+
+  // ICONS
   const PenIcon = () => (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
       <Path d="M12 20h9" stroke={colors.black} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -224,32 +242,33 @@ const HomeScreen = () => {
         />
       </View>
 
+      {/* AUTHOR LETTER FILTER */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={globalStyles.filterContainer}
-        contentContainerStyle={{ paddingHorizontal: 8 }}
+        contentContainerStyle={{ paddingHorizontal: 8, marginTop: 4 }}
       >
-        {categories.map(category => (
+        {authorLetterCategories.map(letter => (
           <TouchableOpacity
-            key={category}
+            key={letter}
             style={[
               globalStyles.filterButton,
-              filter === category && { backgroundColor: colors.primary },
-              filter !== category && {
+              authorLetterFilter === letter && { backgroundColor: colors.primary },
+              authorLetterFilter !== letter && {
                 backgroundColor: 'transparent',
                 borderColor: colors.primary,
               },
             ]}
-            onPress={() => setFilter(category)}
+            onPress={() => setAuthorLetterFilter(letter)}
           >
             <Text
               style={[
                 globalStyles.filterButtonText,
-                filter !== category && { color: colors.primary },
+                authorLetterFilter !== letter && { color: colors.primary },
               ]}
             >
-              {category}
+              {letter}
             </Text>
           </TouchableOpacity>
         ))}
@@ -261,7 +280,6 @@ const HomeScreen = () => {
     <PostCard
       post={post}
       onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
-      // Pass global audio state so only one post can play at a time
       currentlyPlayingPostId={currentlyPlayingPostId}
       setCurrentlyPlayingPostId={setCurrentlyPlayingPostId}
       playingTrackIndex={playingTrackIndex}
@@ -283,7 +301,7 @@ const HomeScreen = () => {
   const renderEmpty = () => (
     <View style={globalStyles.noPostsContainer}>
       <Text style={globalStyles.noPostsText}>
-        {searchQuery || filter !== 'All'
+        {searchQuery || filter !== 'All' || authorLetterFilter !== 'All'
           ? 'No posts found matching your criteria'
           : 'No posts available'}
       </Text>
@@ -329,7 +347,6 @@ const HomeScreen = () => {
 };
 
 export default HomeScreen;
-
 
 
 

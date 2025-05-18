@@ -19,10 +19,9 @@ import {
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { globalStyles, colors } from '../styles/globalStyles';
 import Header from '../components/Header';
-import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
-import { NavigationProp } from '../types/navigation';
 import PostCard from '../components/PostCard';
+import { ScreenProps } from '../types/navigation';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -45,9 +44,9 @@ const DefaultPageAvatar = ({ name }) => (
   </View>
 );
 
-const ProfileScreen = () => {
-  const navigation = useNavigation<NavigationProp<'Profile'>>();
-  const { user, fetchUserDetails } = useAuth();
+const ProfileScreen = ({ route, navigation }: ScreenProps<'Profile'>) => {
+  const { userId } = route.params;
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('Posts');
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState('default');
@@ -68,35 +67,34 @@ const ProfileScreen = () => {
   const translateX = useRef(new Animated.Value(0)).current;
   const underlineTranslateX = useRef(new Animated.Value(0)).current;
 
+  // Fetch by userId so the screen always matches the profile being viewed
   const loadUserData = async () => {
-    if (user?.email) {
-      try {
-        setLoading(true);
-        const response = await fetchUserDetails(user.email);
-        const fetchedUser = response.result[0]?.value;
-        setUserDetails(fetchedUser);
-        if (fetchedUser?.pinnedPostTheme) {
-          setSelectedTheme(fetchedUser.pinnedPostTheme);
-        }
-        // console.log('User details loaded:', fetchedUser);
-      } catch (error) {
-        console.error('Error loading user details:', error);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+    if (!userId) return;
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `https://proxy.hostakkhor.com/proxy/get?key=hostakkhor_users_${userId}`
+      );
+      if (!response.ok) throw new Error('Failed to fetch user');
+      const data = await response.json();
+      setUserDetails(data);
+      if (data?.pinnedPostTheme) {
+        setSelectedTheme(data.pinnedPostTheme);
+      } else {
+        setSelectedTheme('default');
       }
+    } catch (error) {
+      setUserDetails(null);
+      setSelectedTheme('default');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const getCurrentDateTime = () => {
-    const now = new Date();
-    return now.toISOString().slice(0, 19).replace('T', ' ');
-  };
-
+  // Fetch posts by authorId = userId
   const fetchUserPosts = async () => {
-    if (!user?.id) {
-      return;
-    }
+    if (!userId) return;
     try {
       setPostsLoading(true);
       const response = await fetch(`https://proxy.hostakkhor.com/proxy/getsorted?keys=hostakkhor_posts_*&skip=0&limit=1000`);
@@ -107,7 +105,7 @@ const ProfileScreen = () => {
       if (data.result && Array.isArray(data.result)) {
         const posts = data.result
           .map((item: any) => item.value)
-          .filter((post: any) => post.authorId === user.id)
+          .filter((post: any) => post.authorId === userId)
           .sort((a: any, b: any) => b.created_at - a.created_at);
         setUserPosts(posts);
       } else {
@@ -120,8 +118,9 @@ const ProfileScreen = () => {
     }
   };
 
+  // Fetch pages by authorId = userId
   const fetchUserPages = async () => {
-    if (!user?.id) return;
+    if (!userId) return;
     try {
       setPagesLoading(true);
       const response = await fetch(`https://proxy.hostakkhor.com/proxy/getsorted?keys=hostakkhor_pages_*&skip=0&limit=1000`);
@@ -130,12 +129,14 @@ const ProfileScreen = () => {
       if (data.result && Array.isArray(data.result)) {
         const pages = data.result
           .map((item: any) => item.value)
-          .filter((page: any) => page.authorId === user.id)
+          .filter((page: any) => page.authorId === userId)
           .sort((a: any, b: any) => b.created_at - a.created_at);
         setUserPages(pages);
+      } else {
+        setUserPages([]);
       }
     } catch (error) {
-      // ...
+      setUserPages([]);
     } finally {
       setPagesLoading(false);
     }
@@ -145,7 +146,8 @@ const ProfileScreen = () => {
     loadUserData();
     fetchUserPosts();
     fetchUserPages();
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -154,7 +156,7 @@ const ProfileScreen = () => {
       fetchUserPages();
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, userId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -263,9 +265,6 @@ const ProfileScreen = () => {
     return <DefaultProfileImage size="small" />;
   };
 
-  // REMOVE the old renderPostItem and use PostCard below
-
-  // For the pages tab, render avatar as image or fallback to the first letter of page name
   const renderPageItem = ({ item }: { item: any }) => {
     const showAvatar = item.avatar && typeof item.avatar === 'string' && item.avatar.startsWith('http');
     return (
@@ -320,24 +319,26 @@ const ProfileScreen = () => {
           {renderProfileImage()}
           
           <Text style={globalStyles.profileName}>
-            {userDetails?.name || user?.name || 'No name provided'}
+            {userDetails?.name || 'No name provided'}
           </Text>
           
           <Text style={globalStyles.profileEmail}>
-            {userDetails?.email || user?.email || 'No email provided'}
+            {userDetails?.email || 'No email provided'}
           </Text>
           
           <Text style={globalStyles.profileDate}>
             Joined {formatDate(userDetails?.created_at)}
           </Text>
           
-          <TouchableOpacity
-            style={globalStyles.editProfileButton}
-            onPress={() => navigation.navigate('EditProfile')}
-          >
-            <Icon name="pencil" size={14} color="#000" style={{ marginRight: 6 }} />
-            <Text style={globalStyles.editProfileText}>Edit Profile</Text>
-          </TouchableOpacity>
+          {userId === user?.id && (
+            <TouchableOpacity
+              style={globalStyles.editProfileButton}
+              onPress={() => navigation.navigate('EditProfile', { userId })}
+            >
+              <Icon name="pencil" size={14} color="#000" style={{ marginRight: 6 }} />
+              <Text style={globalStyles.editProfileText}>Edit Profile</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={globalStyles.tabButtonContainer}>
@@ -398,19 +399,22 @@ const ProfileScreen = () => {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ padding: 10 }}
             >
+              {/* -- Pinned Post Card and Theme Modal triggers -- */}
               <View style={globalStyles.mydesign}>
                 <View style={globalStyles.sectionTitleWithIcon}>
                   <Icon name="thumb-tack" size={14} color="#000" />
                   <Text style={globalStyles.sectionTitle}>Pinned Posts</Text>
                 </View>
                 <View style={globalStyles.filterContainer}>
-                  <TouchableOpacity
-                    style={globalStyles.themeButton}
-                    onPress={() => setThemeModalVisible(true)}
-                  >
-                    <Icon name="paint-brush" size={14} color="#fff" />
-                    <Text style={[globalStyles.themeButtonText, { marginLeft: 6 }]}>Themes</Text>
-                  </TouchableOpacity>
+                  {userId === user?.id && (
+                    <TouchableOpacity
+                      style={globalStyles.themeButton}
+                      onPress={() => setThemeModalVisible(true)}
+                    >
+                      <Icon name="paint-brush" size={14} color="#fff" />
+                      <Text style={[globalStyles.themeButtonText, { marginLeft: 6 }]}>Themes</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
 
@@ -429,7 +433,7 @@ const ProfileScreen = () => {
                     <Text style={globalStyles.pinnedLabel}>Pinned Post</Text>
                   </View>
                   <Text style={globalStyles.pinnedDate}>
-                    {getCurrentDateTime()}
+                    {new Date().toLocaleString()}
                   </Text>
                 </View>
 
@@ -439,7 +443,7 @@ const ProfileScreen = () => {
 
                 <View style={globalStyles.pinnedUserInfo}>
                   <Text style={globalStyles.pinnedUserName}>
-                    {userDetails?.name || user?.name || 'No name provided'}
+                    {userDetails?.name || 'No name provided'}
                   </Text>
                   <Text style={globalStyles.pinnedUserBio}>
                     {userDetails?.bio || 'No bio available'}
@@ -449,15 +453,18 @@ const ProfileScreen = () => {
                 <View style={globalStyles.pinEmptyOverlay}>
                   <Icon name="thumb-tack" size={24} color="#888" style={{ marginBottom: 8 }} />
                   <Text style={globalStyles.pinEmptyText}>No pinned post available</Text>
-                  <TouchableOpacity style={globalStyles.createPinButton}
-                    onPress={() => navigation.navigate('CreatePost')}
-                  >
-                    <Icon name="thumb-tack" size={12} color="#000" style={{ marginRight: 6 }} />
-                    <Text style={globalStyles.createPinText}>Create a post to pin</Text>
-                  </TouchableOpacity>
+                  {userId === user?.id && (
+                    <TouchableOpacity style={globalStyles.createPinButton}
+                      onPress={() => navigation.navigate('CreatePost')}
+                    >
+                      <Icon name="thumb-tack" size={12} color="#000" style={{ marginRight: 6 }} />
+                      <Text style={globalStyles.createPinText}>Create a post to pin</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </ImageBackground>
 
+              {/* -- User Posts with padding around each PostCard -- */}
               <View style={globalStyles.userPostsSection}>
                 <View style={globalStyles.sectionTitleWithIcon}>
                   <Icon name="image" size={14} color="#000" />
@@ -481,19 +488,21 @@ const ProfileScreen = () => {
                   <FlatList
                     data={filteredPosts}
                     renderItem={({ item }) => (
-                      <PostCard
-                        post={item}
-                        onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
-                        isScreenFocused={true}
-                        currentlyPlayingPostId={currentlyPlayingPostId}
-                        setCurrentlyPlayingPostId={setCurrentlyPlayingPostId}
-                        playingTrackIndex={playingTrackIndex}
-                        setPlayingTrackIndex={setPlayingTrackIndex}
-                      />
+                      <View style={styles.postCardWrapper}>
+                        <PostCard
+                          post={item}
+                          onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+                          isScreenFocused={true}
+                          currentlyPlayingPostId={currentlyPlayingPostId}
+                          setCurrentlyPlayingPostId={setCurrentlyPlayingPostId}
+                          playingTrackIndex={playingTrackIndex}
+                          setPlayingTrackIndex={setPlayingTrackIndex}
+                        />
+                      </View>
                     )}
                     keyExtractor={(item) => item.id}
                     scrollEnabled={false}
-                    contentContainerStyle={{ paddingBottom: 20 }}
+                    contentContainerStyle={{ paddingBottom: 20, paddingHorizontal: 12 }}
                     ListEmptyComponent={
                       <Text style={styles.emptyStateText}>
                         {searchPostsQuery ? 'No posts match your search' : 'No posts available'}
@@ -542,7 +551,7 @@ const ProfileScreen = () => {
                     renderItem={renderPageItem}
                     keyExtractor={(item) => item.id}
                     scrollEnabled={false}
-                    contentContainerStyle={{ paddingBottom: 20 }}
+                    contentContainerStyle={{ paddingBottom: 20, paddingHorizontal: 12 }}
                   />
                 ) : (
                   <Text style={styles.emptyStateText}>
@@ -554,6 +563,7 @@ const ProfileScreen = () => {
           </View>
         </Animated.View>
 
+        {/* Theme Modal */}
         <Modal
           visible={themeModalVisible}
           transparent
@@ -582,6 +592,7 @@ const ProfileScreen = () => {
                       setSelectedTheme(theme);
                       setThemeModalVisible(false);
                     }}
+                    disabled={userId !== user?.id}
                   >
                     <Text
                       style={[
@@ -632,6 +643,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     alignItems: 'center',
+    // padding around the page card
+    marginHorizontal: 8,
   },
   pageAvatar: {
     width: 50,
@@ -671,6 +684,10 @@ const styles = StyleSheet.create({
   pageDate: {
     fontSize: 12,
     color: '#888',
+  },
+  postCardWrapper: {
+    paddingVertical: 8,
+    paddingHorizontal: 4, // Padding around each PostCard
   },
 });
 

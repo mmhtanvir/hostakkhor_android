@@ -16,6 +16,8 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import { useNavigation } from '@react-navigation/native';
 import { RouteProp } from '@react-navigation/native';
 import { globalStyles } from '../styles/globalStyles';
+import { useAuth } from '../contexts/AuthContext'; 
+import PostCard from '../components/PostCard';
 
 export interface IPage {
   id: string;
@@ -49,7 +51,7 @@ export interface IPost {
   likedBy: string[];
   visibility: 'public' | 'private';
   pinned: boolean;
-  pageId?: string; // Added pageId property
+  pageId?: string;
 }
 
 const { width } = Dimensions.get('window');
@@ -71,6 +73,7 @@ interface PagesScreenProps {
 const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
   const navigation = useNavigation();
   const { pageId } = route.params;
+  const { user } = useAuth();
   const [pageInfo, setPageInfo] = useState<IPage | null>(null);
   const [pagePosts, setPagePosts] = useState<IPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,6 +82,10 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
   const [imageError, setImageError] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
+
+  // PostCard audio state
+  const [currentlyPlayingPostId, setCurrentlyPlayingPostId] = useState<string | null>(null);
+  const [playingTrackIndex, setPlayingTrackIndex] = useState<number>(0);
 
   useEffect(() => {
     fetchPageInfo();
@@ -90,16 +97,11 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
       setLoading(true);
       setError(null);
       const url = `https://proxy.hostakkhor.com/proxy/getsorted?keys=hostakkhor_pages_${pageId}`;
-      // console.log('Fetching page data from:', url);
-      
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
       const data = await response.json();
-      // console.log('Raw response:', data);
-      
       if (data?.result?.[0]?.value) {
         setPageInfo(data.result[0].value);
         setImageError(false);
@@ -107,7 +109,6 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
         throw new Error('No page data found');
       }
     } catch (error) {
-      // console.error('Failed to fetch page info:', error);
       setError('Failed to load page information. Please try again.');
     } finally {
       setLoading(false);
@@ -118,33 +119,23 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
     try {
       setPostsLoading(true);
       const url = `https://proxy.hostakkhor.com/proxy/getsorted?keys=hostakkhor_posts_*&skip=0&limit=1000`;
-      // console.log('Fetching page posts from:', url);
-      
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
       const data = await response.json();
-      // console.log('Raw posts response:', data);
-      
       if (data?.result && Array.isArray(data.result)) {
         const posts = data.result
           .map((item: any) => item.value)
           .filter((post: IPost) => {
-            // Check both authorId and pageId to cover all cases
             return post.authorId === pageId || post.pageId === pageId;
           })
           .sort((a: IPost, b: IPost) => b.created_at - a.created_at);
-        
-        // console.log('Filtered page posts:', posts);
         setPagePosts(posts);
       } else {
-        // console.error('Unexpected posts response structure:', data);
         setPagePosts([]);
       }
     } catch (error) {
-      // console.error('Failed to fetch page posts:', error);
       setError('Failed to load page posts. Please try again.');
     } finally {
       setPostsLoading(false);
@@ -167,16 +158,11 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
             try {
               setLoading(true);
               const url = `https://proxy.hostakkhor.com/proxy/remove?key=hostakkhor_pages_${pageId}`;
-              // console.log('Deleting page data with URL:', url);
-
               const response = await fetch(url, { method: 'GET' });
               if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
               }
-
               const result = await response.json();
-              // console.log('Delete response:', result);
-
               if (result.result === 1) {
                 Alert.alert('Success', 'Page deleted successfully.');
                 navigation.goBack();
@@ -184,7 +170,6 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
                 throw new Error('Failed to delete the page.');
               }
             } catch (error) {
-              // console.error('Delete error:', error);
               Alert.alert('Error', 'Failed to delete the page. Please try again.');
             } finally {
               setLoading(false);
@@ -202,7 +187,6 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
       const date = new Date(timestamp);
       return `${date.getDate()} ${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
     } catch (error) {
-      // console.error('Date formatting error:', error);
       return 'Invalid date';
     }
   };
@@ -213,41 +197,20 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
       .finally(() => setRefreshing(false));
   };
 
-  const renderPostItem = ({ item }: { item: IPost }) => (
-    <TouchableOpacity
-      style={globalStyles.postCard}
-      onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
-      activeOpacity={0.8}
-    >
-      {item.images?.[0] ? (
-        <Image
-          source={{ uri: item.images[0] }}
-          style={globalStyles.postImage}
-          resizeMode="cover"
-          onError={() => console.log('Image load failed')}
-        />
-      ) : (
-        <View style={[globalStyles.postImage, globalStyles.postImagePlaceholder]}>
-          <Text style={globalStyles.postImagePlaceholderText}>No Image</Text>
-        </View>
-      )}
+  // Only allow editing, deleting, and post creation if user is author
+  const isAuthor = user && (user.id === pageInfo?.authorId);
 
-      <View style={globalStyles.postInfo}>
-        <Text style={globalStyles.postAuthor} numberOfLines={1}>
-          {item.author?.name || 'Unknown'}
-        </Text>
-        {item.category && (
-          <Text style={globalStyles.postLocation} numberOfLines={1}>
-            {item.category}
-          </Text>
-        )}
-        {item.content && (
-          <Text style={globalStyles.postContent} numberOfLines={2}>
-            {item.content}
-          </Text>
-        )}
-      </View>
-    </TouchableOpacity>
+  const renderPostItem = ({ item }: { item: IPost }) => (
+    <View style={styles.postCardWrapper}>
+      <PostCard
+        post={item}
+        onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+        currentlyPlayingPostId={currentlyPlayingPostId}
+        setCurrentlyPlayingPostId={setCurrentlyPlayingPostId}
+        playingTrackIndex={playingTrackIndex}
+        setPlayingTrackIndex={setPlayingTrackIndex}
+      />
+    </View>
   );
 
   if (loading) {
@@ -316,15 +279,17 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
           )}
           <Text style={styles.pageTitle}>{pageInfo.name || 'Page Title'}</Text>
           <Text style={styles.dateText}>Created {formatDate(pageInfo.created_at)}</Text>
-          <TouchableOpacity
-            style={styles.createPostButton}
-            onPress={() =>
-              navigation.navigate('CreatePost', { pageId: pageInfo.id, pageName: pageInfo.name })
-            }
-          >
-            <Icon name="plus" size={16} color="#fff" />
-            <Text style={styles.createPostButtonText}>Create Post</Text>
-          </TouchableOpacity>
+          {isAuthor && (
+            <TouchableOpacity
+              style={styles.createPostButton}
+              onPress={() =>
+                navigation.navigate('CreatePost', { pageId: pageInfo.id, pageName: pageInfo.name })
+              }
+            >
+              <Icon name="plus" size={16} color="#fff" />
+              <Text style={styles.createPostButtonText}>Create Post</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* About Section */}
@@ -343,17 +308,21 @@ const PagesScreen: React.FC<PagesScreenProps> = ({ route }) => {
             <Icon name="share-alt" size={16} color="#374151" />
             <Text style={styles.actionButtonText}>Share Page</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('EditPage', { pageId: pageId })}
-          >
-            <Icon name="pencil" size={16} color="#374151" />
-            <Text style={styles.actionButtonText}>Edit Page</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={handleDelete}>
-            <Icon name="trash" size={16} color="#DC2626" />
-            <Text style={styles.deleteButtonText}>Delete Page</Text>
-          </TouchableOpacity>
+          {isAuthor && (
+            <>
+              <TouchableOpacity 
+                style={styles.actionButton}
+                onPress={() => navigation.navigate('EditPage', { pageId: pageId })}
+              >
+                <Icon name="pencil" size={16} color="#374151" />
+                <Text style={styles.actionButtonText}>Edit Page</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButton} onPress={handleDelete}>
+                <Icon name="trash" size={16} color="#DC2626" />
+                <Text style={styles.deleteButtonText}>Delete Page</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* Tabs */}
@@ -548,6 +517,11 @@ const styles = StyleSheet.create({
   },
   postsList: {
     paddingBottom: 20,
+    paddingHorizontal: 12, // Padding for the list
+  },
+  postCardWrapper: {
+    paddingVertical: 8,
+    paddingHorizontal: 4, // Padding around each PostCard
   },
 });
 

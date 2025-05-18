@@ -11,7 +11,7 @@ import {
 import { IPost } from '../types/ipost';
 import AudioPlayer from './AudioPlayer';
 
-const DEFAULT_IMAGE = require('../assets/audio-placeholder.png'); 
+const DEFAULT_IMAGE = require('../assets/audio-placeholder.png');
 
 interface PostCardProps {
   post: IPost;
@@ -47,7 +47,7 @@ const PostCard: React.FC<PostCardProps> = ({
     } else if (isPlaying) {
       setCurrentlyPlayingPostId(null);
     }
-  }, [post.id, currentTrackIndex, isPlaying]);
+  }, [post.id, currentTrackIndex, isPlaying, setCurrentlyPlayingPostId, setPlayingTrackIndex]);
 
   const handlePreviousTrack = useCallback(() => {
     if (currentTrackIndex > 0) {
@@ -56,7 +56,7 @@ const PostCard: React.FC<PostCardProps> = ({
       setPlayingTrackIndex(newIndex);
       setCurrentlyPlayingPostId(post.id);
     }
-  }, [currentTrackIndex, post.id]);
+  }, [currentTrackIndex, post.id, setPlayingTrackIndex, setCurrentlyPlayingPostId]);
 
   const handleNextTrack = useCallback(() => {
     if (currentTrackIndex < (post.audioFiles?.length || 0) - 1) {
@@ -65,16 +65,14 @@ const PostCard: React.FC<PostCardProps> = ({
       setPlayingTrackIndex(newIndex);
       setCurrentlyPlayingPostId(post.id);
     }
-  }, [currentTrackIndex, post.audioFiles?.length, post.id]);
+  }, [currentTrackIndex, post.audioFiles?.length, post.id, setPlayingTrackIndex, setCurrentlyPlayingPostId]);
 
   // Image handling
   const handleImageError = useCallback((e: NativeSyntheticEvent<ImageErrorEventData>) => {
-    console.log('Image load error:', e.nativeEvent.error);
     setImageError(true);
   }, []);
 
   const handleAvatarError = useCallback((e: NativeSyntheticEvent<ImageErrorEventData>) => {
-    console.log('Avatar load error:', e.nativeEvent.error);
     setAvatarError(true);
   }, []);
 
@@ -89,12 +87,14 @@ const PostCard: React.FC<PostCardProps> = ({
 
   // Determine image sources with fallbacks
   const imageSource = React.useMemo(() => {
-    if (!imageError && 
-        post.images && 
-        Array.isArray(post.images) && 
-        post.images[0] && 
-        typeof post.images[0] === 'string' && 
-        post.images[0].startsWith('http')) {
+    if (
+      !imageError &&
+      post.images &&
+      Array.isArray(post.images) &&
+      post.images[0] &&
+      typeof post.images[0] === 'string' &&
+      post.images[0].startsWith('http')
+    ) {
       return { uri: post.images[0] };
     }
     return DEFAULT_IMAGE;
@@ -109,13 +109,13 @@ const PostCard: React.FC<PostCardProps> = ({
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={styles.card}>
-      <Image 
-        source={imageSource} 
-        style={styles.image} 
-        resizeMode="cover" 
+      <Image
+        source={imageSource}
+        style={styles.image}
+        resizeMode="cover"
         onError={handleImageError}
       />
-      
+
       <View style={styles.overlay}>
         <View style={styles.contentContainer}>
           <View style={styles.textWrapper}>
@@ -124,14 +124,15 @@ const PostCard: React.FC<PostCardProps> = ({
               {post.content}
             </Text>
           </View>
-          
+
           {hasAudioFiles && (
-            <AudioPlayer 
+            <AudioPlayer
               audioUrl={post.audioFiles[currentTrackIndex]}
               index={currentTrackIndex}
               postId={post.id}
               isScreenFocused={isScreenFocused}
-              currentlyPlaying={isPlaying}
+              currentlyPlayingPostId={currentlyPlayingPostId}
+              playingTrackIndex={playingTrackIndex}
               onPlayStateChange={handlePlayStateChange}
               totalTracks={post.audioFiles.length}
               currentTrackNumber={currentTrackIndex + 1}
@@ -141,7 +142,7 @@ const PostCard: React.FC<PostCardProps> = ({
             />
           )}
         </View>
-        
+
         <View style={styles.logoWrapper}>
           {avatarSource ? (
             <Image
@@ -163,7 +164,6 @@ const PostCard: React.FC<PostCardProps> = ({
   );
 };
 
-// Updated styles with better organization
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',

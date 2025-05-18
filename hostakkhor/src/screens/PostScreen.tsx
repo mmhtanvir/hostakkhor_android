@@ -173,15 +173,14 @@ const PostDetailsScreen: React.FC = () => {
   const formatDate = (timestamp: number): string => {
     try {
       const date = new Date(timestamp);
-      return format(date, "yyyy-MM-dd HH:mm:ss");
+      return format(date, "yyyy-MM-dd");
     } catch (error) {
       console.error('Error formatting date:', error);
       return 'Invalid date';
     }
   };
 
-  const isCurrentUserAuthor =
-    user?.id === post?.authorId || user?.login === 'undereighteen';
+  const isCurrentUserAuthor = user?.id === post?.authorId;
 
   // Audio navigation handlers
   const handlePlayStateChange = useCallback((isPlaying: boolean) => {
@@ -277,39 +276,54 @@ const PostDetailsScreen: React.FC = () => {
           <View style={styles.postCard}>
             {/* Post Header */}
             <View style={styles.postHeader}>
-              <View style={styles.profileSection}>
-                <View style={styles.avatar}>
-                  {post.author.avatar ? (
-                    <Image
-                      source={{ uri: post.author.avatar }}
-                      style={styles.avatarImage}
+                <View style={styles.profileSection}>
+                  <TouchableOpacity
+                    onPress={() =>
+                      navigation.navigate('Profile', { userId: post.author.id })
+                    }
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.avatar}>
+                      {post.author.avatar ? (
+                        <Image
+                          source={{ uri: post.author.avatar }}
+                          style={styles.avatarImage}
+                        />
+                      ) : (
+                        <Text style={styles.avatarText}>
+                          {post.author.name[0]?.toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+
+                  <View style={styles.authorInfo}>
+                    <TouchableOpacity
+                      onPress={() =>
+                        navigation.navigate('Profile', { userId: post.author.id })
+                      }
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.authorNameLink}>{post.author.name}</Text>
+                    </TouchableOpacity>
+                    <View style={styles.dateContainer}>
+                      <Icon name="calendar" size={14} color="#6B7280" />
+                      <Text style={styles.dateText}>
+                        {formatDate(post.created_at)}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity onPress={() => setIsShareModalVisible(true)}>
+                    <Icon name="share-2" size={24} color="#666" />
+                  </TouchableOpacity>
+                  {post && (
+                    <ShareModal
+                      visible={isShareModalVisible}
+                      onClose={() => setIsShareModalVisible(false)}
+                      post={post}
                     />
-                  ) : (
-                    <Text style={styles.avatarText}>
-                      {post.author.name[0]?.toUpperCase()}
-                    </Text>
                   )}
                 </View>
-                <View style={styles.authorInfo}>
-                  <Text style={styles.authorName}>{post.author.name}</Text>
-                  <View style={styles.dateContainer}>
-                    <Icon name="calendar" size={14} color="#6B7280" />
-                    <Text style={styles.dateText}>
-                      {formatDate(post.created_at)}
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity onPress={() => setIsShareModalVisible(true)}>
-                  <Icon name="share-2" size={24} color="#666" />
-                </TouchableOpacity>
-                {post && (
-                  <ShareModal
-                    visible={isShareModalVisible}
-                    onClose={() => setIsShareModalVisible(false)}
-                    post={post}
-                  />
-                )}
-              </View>
             </View>
 
             {/* Content */}
@@ -443,7 +457,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    backgroundColor: '#B45309',
   },
   avatarImage: {
     width: '100%',

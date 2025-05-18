@@ -5,9 +5,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
-  Platform,
   Alert,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import AudioRecorderPlayer from 'react-native-audio-recorder-player';
 import Icon from 'react-native-vector-icons/Feather';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
@@ -16,54 +16,68 @@ interface AudioPlayerProps {
   audioUrl: string;
   index: number;
   postId: string;
+  currentlyPlayingPostId: string | null;
+  playingTrackIndex: number;
   isScreenFocused: boolean;
-  currentlyPlaying: boolean;
   onPlayStateChange: (isPlaying: boolean) => void;
-  // Multiple tracks props
   totalTracks?: number;
   currentTrackNumber?: number;
   onPreviousTrack?: () => void;
   onNextTrack?: () => void;
-  // Optional style props
   compact?: boolean;
-  inPostCard?: boolean; // New prop to style specifically for PostCard
+  inPostCard?: boolean;
 }
 
 const AudioPlayer: React.FC<AudioPlayerProps> = ({
   audioUrl,
   index,
   postId,
+  currentlyPlayingPostId,
+  playingTrackIndex,
   isScreenFocused,
-  currentlyPlaying,
   onPlayStateChange,
   totalTracks = 1,
   currentTrackNumber = 1,
   onPreviousTrack,
   onNextTrack,
   compact = false,
-  inPostCard = false, // Default to false
+  inPostCard = false,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentPositionSec, setCurrentPositionSec] = useState(0);
   const [currentDurationSec, setCurrentDurationSec] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSeeking, setIsSeeking] = useState(false);
+  const [seekValue, setSeekValue] = useState(0);
   const progressWidth = useRef(new Animated.Value(0)).current;
   const audioRecorderPlayer = useRef(new AudioRecorderPlayer()).current;
-  
-  // Calculate if we need to show track navigation
+
   const hasMultipleTracks = totalTracks > 1;
+  const isThisPlayerActive =
+    postId === currentlyPlayingPostId && index === playingTrackIndex;
 
+  // Stop audio if not the active player or screen loses focus
   useEffect(() => {
-    if (!isScreenFocused && isPlaying) {
+    if ((!isThisPlayerActive || !isScreenFocused) && isPlaying) {
       stopPlaying();
     }
-  }, [isScreenFocused]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isThisPlayerActive, isScreenFocused]);
+
+  // Reset state when track or post changes
+  useEffect(() => {
+    setIsPlaying(false);
+    setCurrentPositionSec(0);
+    setCurrentDurationSec(0);
+    handleCleanup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioUrl, postId]);
 
   useEffect(() => {
-    if (!currentlyPlaying && isPlaying) {
-      stopPlaying();
-    }
-  }, [currentlyPlaying]);
+    setupPlayer();
+    return () => handleCleanup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     Animated.timing(progressWidth, {
@@ -72,18 +86,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
       useNativeDriver: false,
     }).start();
   }, [currentPositionSec, currentDurationSec]);
-
-  useEffect(() => {
-    setupPlayer();
-    return () => handleCleanup();
-  }, []);
-
-  useEffect(() => {
-    setIsPlaying(false);
-    setCurrentPositionSec(0);
-    setCurrentDurationSec(0);
-    handleCleanup();
-  }, [audioUrl, postId]);
 
   const setupPlayer = async () => {
     try {
@@ -109,25 +111,32 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const onPlayPause = async () => {
     try {
       setIsLoading(true);
-      
+
       if (isPlaying) {
         await audioRecorderPlayer.pausePlayer();
         setIsPlaying(false);
         onPlayStateChange(false);
       } else {
-        if (currentPositionSec === 0) {
-          await audioRecorderPlayer.startPlayer(audioUrl);
-          audioRecorderPlayer.addPlayBackListener((e) => {
-            if (e.currentPosition === e.duration) {
-              stopPlaying();
-              return;
-            }
+        // Always stop before starting (fixes "Player is already running" error)
+        try {
+          await audioRecorderPlayer.stopPlayer();
+          audioRecorderPlayer.removePlayBackListener();
+        } catch (stopErr) {
+          // ignore
+        }
+
+        await audioRecorderPlayer.startPlayer(audioUrl);
+        audioRecorderPlayer.addPlayBackListener((e) => {
+          if (e.currentPosition === e.duration) {
+            stopPlaying();
+            return;
+          }
+          if (!isSeeking) {
             setCurrentPositionSec(e.currentPosition);
             setCurrentDurationSec(e.duration);
-          });
-        } else {
-          await audioRecorderPlayer.resumePlayer();
-        }
+          }
+        });
+
         setIsPlaying(true);
         onPlayStateChange(true);
       }
@@ -153,113 +162,101 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     }
   };
 
-  // Handle seeking directly by tapping on the seekbar
-  const handleSeekTap = async (event) => {
-    if (currentDurationSec === 0) return;
-    
+  const onSlidingStart = () => {
+    setIsSeeking(true);
+    setSeekValue(currentPositionSec);
+  };
+
+  const onSlidingComplete = async (value: number) => {
     try {
-      const { locationX } = event.nativeEvent;
-      const progressBarWidth = styles.progressBarContainer.width;
-      const seekPosition = (locationX / progressBarWidth) * currentDurationSec;
-      
-      await audioRecorderPlayer.seekToPlayer(seekPosition);
-      setCurrentPositionSec(seekPosition);
+      await audioRecorderPlayer.seekToPlayer(value);
+      setCurrentPositionSec(value);
     } catch (error) {
       console.error('Failed to seek:', error);
+    } finally {
+      setIsSeeking(false);
     }
   };
 
-  // Only show mm:ss, no microseconds or tenths
   const formatTime = (milliseconds: number): string => {
     const totalSeconds = Math.floor(milliseconds / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds
-      .toString()
-      .padStart(2, '0')}`;
+return `${minutes.toString().padStart(2, '0')}:${seconds
+  .toString()
+  .padStart(2, '0')}`;
   };
 
   // PostCard specific audio player
   if (inPostCard) {
     return (
       <View style={styles.postCardPlayerContainer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.postCardPlayButton}
           onPress={onPlayPause}
           disabled={isLoading}
         >
-          <Icon 
-            name={isPlaying ? "pause" : "play"} 
-            size={16} 
-            color="#fff" 
+          <Icon
+            name={isPlaying ? 'pause' : 'play'}
+            size={16}
+            color="#fff"
           />
         </TouchableOpacity>
-        
         <View style={styles.postCardPlayerContent}>
-          <TouchableOpacity 
-            style={styles.postCardProgressBarContainer}
-            onPress={handleSeekTap}
-          >
-            <Animated.View 
-              style={[
-                styles.postCardProgressBar,
-                {
-                  width: progressWidth.interpolate({
-                    inputRange: [0, 100],
-                    outputRange: ['0%', '100%'],
-                  }),
-                },
-              ]} 
-            />
-          </TouchableOpacity>
-          
+          <Slider
+            style={styles.postCardSlider}
+            minimumValue={0}
+            maximumValue={currentDurationSec}
+            value={isSeeking ? seekValue : currentPositionSec}
+            minimumTrackTintColor="#FFF"
+            maximumTrackTintColor="rgba(255,255,255,0.2)"
+            thumbTintColor="#FFF"
+            onValueChange={setSeekValue}
+            onSlidingStart={onSlidingStart}
+            onSlidingComplete={onSlidingComplete}
+            disabled={currentDurationSec === 0}
+          />
           <Text style={styles.postCardTimeText}>
-            {formatTime(currentPositionSec)} / {formatTime(currentDurationSec || 0)}
+            {formatTime(isSeeking ? seekValue : currentPositionSec)} / {formatTime(currentDurationSec || 0)}
           </Text>
         </View>
       </View>
     );
   }
 
-  // Render compact version of the player for PostCard
+  // Compact version
   if (compact) {
     return (
       <View style={styles.compactContainer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.compactPlayButton}
           onPress={onPlayPause}
           disabled={isLoading}
         >
-          <Icon 
-            name={isPlaying ? "pause" : "play"} 
-            size={16} 
-            color="#B45309" 
+          <Icon
+            name={isPlaying ? 'pause' : 'play'}
+            size={16}
+            color="#B45309"
           />
         </TouchableOpacity>
-        
         <View style={styles.compactProgressContainer}>
           <Text style={styles.compactTimeText}>
-            {formatTime(currentPositionSec)} / {formatTime(currentDurationSec || 0)}
+            {formatTime(isSeeking ? seekValue : currentPositionSec)} / {formatTime(currentDurationSec || 0)}
           </Text>
-          
-          <TouchableOpacity 
-            style={styles.compactProgressBarContainer}
-            onPress={handleSeekTap}
-          >
-            <Animated.View 
-              style={[
-                styles.compactProgressBar,
-                {
-                  width: progressWidth.interpolate({
-                    inputRange: [0, 100],
-                    outputRange: ['0%', '100%'],
-                  }),
-                },
-              ]} 
-            />
-          </TouchableOpacity>
+          <Slider
+            style={styles.compactSlider}
+            minimumValue={0}
+            maximumValue={currentDurationSec}
+            value={isSeeking ? seekValue : currentPositionSec}
+            minimumTrackTintColor="#B45309"
+            maximumTrackTintColor="rgba(180,83,9,0.2)"
+            thumbTintColor="#B45309"
+            onValueChange={setSeekValue}
+            onSlidingStart={onSlidingStart}
+            onSlidingComplete={onSlidingComplete}
+            disabled={currentDurationSec === 0}
+          />
         </View>
-        
         {hasMultipleTracks && (
           <View style={styles.compactTrackControls}>
             <TouchableOpacity
@@ -293,7 +290,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
     );
   }
 
-  // Original full-sized player
+  // Full player
   return (
     <View style={styles.container}>
       <View style={styles.playerContent}>
@@ -304,7 +301,6 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
             </Text>
           </View>
         )}
-        
         <View style={styles.controlsRow}>
           <View style={styles.controls}>
             {hasMultipleTracks && (
@@ -322,19 +318,17 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 />
               </TouchableOpacity>
             )}
-            
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.playButton, isLoading && styles.buttonDisabled]}
               onPress={onPlayPause}
               disabled={isLoading}
             >
-              <Icon 
-                name={isPlaying ? "pause" : "play"} 
-                size={20} 
-                color="white" 
+              <Icon
+                name={isPlaying ? 'pause' : 'play'}
+                size={20}
+                color="white"
               />
             </TouchableOpacity>
-            
             {hasMultipleTracks && (
               <TouchableOpacity
                 style={styles.trackNavButton}
@@ -351,35 +345,29 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({
               </TouchableOpacity>
             )}
           </View>
-
           <Text style={styles.timeText}>
-            {formatTime(currentPositionSec)}/{formatTime(currentDurationSec)}
+            {formatTime(isSeeking ? seekValue : currentPositionSec)}/{formatTime(currentDurationSec)}
           </Text>
         </View>
-
-        <TouchableOpacity 
-          style={styles.progressBarContainer}
-          onPress={handleSeekTap}
-        >
-          <Animated.View 
-            style={[
-              styles.progressBar,
-              {
-                width: progressWidth.interpolate({
-                  inputRange: [0, 100],
-                  outputRange: ['0%', '100%'],
-                }),
-              },
-            ]} 
-          />
-        </TouchableOpacity>
+        <Slider
+          style={styles.slider}
+          minimumValue={0}
+          maximumValue={currentDurationSec}
+          value={isSeeking ? seekValue : currentPositionSec}
+          minimumTrackTintColor="#FFF"
+          maximumTrackTintColor="rgba(255,255,255,0.2)"
+          thumbTintColor="#FFF"
+          onValueChange={setSeekValue}
+          onSlidingStart={onSlidingStart}
+          onSlidingComplete={onSlidingComplete}
+          disabled={currentDurationSec === 0}
+        />
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  // PostCard player specific styles
   postCardPlayerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -391,7 +379,7 @@ const styles = StyleSheet.create({
   },
   postCardPlayButton: {
     width: 30,
-    height: 30, 
+    height: 30,
     borderRadius: 15,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
@@ -401,25 +389,16 @@ const styles = StyleSheet.create({
   postCardPlayerContent: {
     flex: 1,
   },
-  postCardProgressBarContainer: {
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 2,
-    overflow: 'hidden',
+  postCardSlider: {
     width: '100%',
+    height: 22,
     marginBottom: 4,
-  },
-  postCardProgressBar: {
-    height: '100%',
-    backgroundColor: 'white',
-    borderRadius: 2,
   },
   postCardTimeText: {
     color: 'white',
     fontSize: 10,
   },
 
-  // Original styles
   container: {
     backgroundColor: '#B45309',
     borderRadius: 8,
@@ -474,20 +453,13 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 12,
   },
-  progressBarContainer: {
+  slider: {
     width: '100%',
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 2,
-    overflow: 'hidden',
+    height: 26,
+    marginTop: 2,
+    marginBottom: 2,
   },
-  progressBar: {
-    height: '100%',
-    backgroundColor: 'white',
-    borderRadius: 2,
-  },
-  
-  // Compact styles for PostCard integration
+
   compactContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -513,17 +485,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginBottom: 2,
   },
-  compactProgressBarContainer: {
-    height: 3,
-    backgroundColor: 'rgba(180, 83, 9, 0.2)',
-    borderRadius: 1.5,
-    overflow: 'hidden',
+  compactSlider: {
     width: '100%',
-  },
-  compactProgressBar: {
-    height: '100%',
-    backgroundColor: '#B45309',
-    borderRadius: 1.5,
+    height: 18,
   },
   compactTrackControls: {
     flexDirection: 'row',

@@ -18,9 +18,8 @@ import { useAuth } from '../contexts/AuthContext';
 const DefaultProfileImage = ({ size }) => (
   <View 
     style={[
-      size === 'small' ? globalStyles.profileImageLarge: globalStyles.profileImage,
+      size === 'small' ? globalStyles.profileImageLarge : globalStyles.profileImage,
       { width: size === 'small' ? 20 : 40, height: size === 'small' ? 20 : 40 },
-      size === 'small' ? { backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' ,} : { backgroundColor: '#e1e1e1', justifyContent: 'center', alignItems: 'center' },
       { backgroundColor: '#e1e1e1', justifyContent: 'center', alignItems: 'center' }
     ]}
   >
@@ -48,29 +47,40 @@ const SignOutIcon = () => (
   </Svg>
 );
 
-const Header = ({ onLogoPress, onProfilePress, showSignIn = true, showProfile = true }: any) => {
+const Header = ({
+  onLogoPress,
+  onProfilePress,
+  showSignIn = true,
+  showProfile = true,
+}: any) => {
   const navigation = useNavigation();
   const [showDropdown, setShowDropdown] = useState(false);
   const { user, logout, fetchUserDetails } = useAuth();
   const [imageError, setImageError] = useState(false);
-  const [imageLoading, setImageLoading] = useState(true);
+  const [imageLoading, setImageLoading] = useState(false);
   const [userDetails, setUserDetails] = useState<any>(null);
 
+  // Fetch user details by user.id instead of user.email
   useEffect(() => {
     const loadUserDetails = async () => {
-      if (user?.email) {
+      if (user?.id) {
         try {
-          const response = await fetchUserDetails(user.email);
+          // If your fetchUserDetails supports userId, use it. Otherwise, fallback to email.
+          const response = await fetchUserDetails(user.id);
           if (response?.result?.[0]?.value) {
             setUserDetails(response.result[0].value);
-            console.log('Loaded user details:', response.result[0].value);
+          } else if (typeof response === 'object') {
+            setUserDetails(response);
           }
         } catch (error) {
-          console.error('Error loading user details:', error);
+          setUserDetails(null);
         }
+      } else {
+        setUserDetails(null);
       }
+      setImageError(false);
+      setImageLoading(false);
     };
-
     loadUserDetails();
   }, [user]);
 
@@ -83,28 +93,31 @@ const Header = ({ onLogoPress, onProfilePress, showSignIn = true, showProfile = 
         routes: [{ name: 'SignIn' }],
       });
     } catch (error) {
-      console.error('Logout error:', error);
+      // Handle error
     }
   };
 
+  // Always pass userId for profile navigation.
   const navigateToProfile = () => {
     setShowDropdown(false);
-    navigation.navigate('Profile');
+    if (user && user.id) {
+      navigation.navigate('Profile', { userId: user.id });
+    } else {
+      navigation.navigate('SignIn');
+    }
   };
 
   const renderProfileImage = (style: any, dropdownImage = false) => {
     const profileUrl = userDetails?.profileImageUrl;
-
     if (profileUrl && !imageError) {
       return (
         <TouchableOpacity style={{ position: 'relative' }} onPress={navigateToProfile}>
           <Image
-            source={{ uri: profileUrl, cache: 'reload' }}
+            source={{ uri: profileUrl }}
             style={[style, { width: 40, height: 40, borderRadius: 20 }]}
             onLoadStart={() => setImageLoading(true)}
             onLoadEnd={() => setImageLoading(false)}
-            onError={(error) => {
-              console.log('Profile image failed to load:', profileUrl, error);
+            onError={() => {
               setImageError(true);
               setImageLoading(false);
             }}
@@ -129,7 +142,6 @@ const Header = ({ onLogoPress, onProfilePress, showSignIn = true, showProfile = 
         </TouchableOpacity>
       );
     }
-
     return (
       <TouchableOpacity onPress={navigateToProfile}>
         <DefaultProfileImage />
@@ -175,7 +187,7 @@ const Header = ({ onLogoPress, onProfilePress, showSignIn = true, showProfile = 
             >
               {renderProfileImage(globalStyles.profileButton)}
               {(userDetails?.name || user?.name) && (
-                <Text style={globalStyles.profileNameText}>
+                <Text style={globalStyles.profileNameText} numberOfLines={1}>
                   {userDetails?.name || user?.name}
                 </Text>
               )}

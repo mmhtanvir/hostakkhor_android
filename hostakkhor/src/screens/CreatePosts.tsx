@@ -85,7 +85,7 @@ const CreatePost = () => {
 
   const updateCurrentDate = () => {
     const date = new Date();
-    const formattedDate = format(date, 'yyyy-MM-dd HH:mm:ss');
+    const formattedDate = format(date, 'yyyy-MM-dd');
     setCurrentDate(formattedDate);
   };
 

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^1.21.0",
+    "@react-native-clipboard/clipboard": "^1.16.2",
     "@react-native-community/slider": "^4.5.6",
     "@react-native-picker/picker": "^2.11.0",
     "@react-navigation/native": "^6.1.18",
@@ -73,10 +74,9 @@
   "engines": {
     "node": ">=18"
   },
-
-"codegenConfig": {
-  "name": "Hostakkhor",
-  "type": "all",
-  "jsSrcsDir": "src"
-}
+  "codegenConfig": {
+    "name": "Hostakkhor",
+    "type": "all",
+    "jsSrcsDir": "src"
+  }
 }

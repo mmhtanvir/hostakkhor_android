@@ -283,17 +283,17 @@ export const globalStyles = StyleSheet.create({
   },
   filterContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
     marginTop: 12,
     marginBottom: 16,
   },
   filterButton: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.inputBorder,
+    marginLeft: 3,
   },
   filterButtonText: {
     color: colors.white,
