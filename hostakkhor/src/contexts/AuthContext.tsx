@@ -3,7 +3,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Linking } from 'react-native';
 import queryString from 'query-string';
-import { SSO_SERVER_URL, CLIENT_ID } from '@env';
+import {
+  SSO_SERVER_URL,
+  CLIENT_ID,
+  REDIRECT_URL,
+  GOOGLE_OAUTH_WEB_CLIENT_ID,
+  GOOGLE_OAUTH_SCOPES,
+  FACEBOOK_APP_ID,
+  FACEBOOK_CLIENT_TOKEN
+} from '@env';
+
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { AccessToken, LoginManager, Settings as FBSettings } from 'react-native-fbsdk-next';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -13,6 +24,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<boolean>;
   signUpWithEmail: (email: string, password: string, name: string) => Promise<boolean>;
+  signInWithGoogle: () => Promise<boolean>;
+  signInWithFacebook: () => Promise<boolean>;
   loading: boolean;
   fetchUserDetails: (email: string) => Promise<any>;
   fetchUserProfile: (token: string) => Promise<void>;
@@ -48,7 +61,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<IUser | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const REDIRECT_URL = "hostakkhor://auth";
+  // SDK initialization
+  useEffect(() => {
+    try {
+      if (GOOGLE_OAUTH_WEB_CLIENT_ID) {
+        GoogleSignin.configure({
+          webClientId: GOOGLE_OAUTH_WEB_CLIENT_ID,
+          scopes: GOOGLE_OAUTH_SCOPES ? GOOGLE_OAUTH_SCOPES.split(',') : ['profile', 'email'],
+          offlineAccess: true,
+        });
+      }
+      FBSettings.initializeSDK();
+    } catch (e) {
+      console.log("SDK init error", e);
+    }
+  }, []);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -58,10 +85,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           AsyncStorage.getItem('authToken'),
           AsyncStorage.getItem('user'),
         ]);
-
         if (storedToken) {
           setToken(storedToken);
-
           if (storedUser) {
             const parsedUser = JSON.parse(storedUser);
             setUser(parsedUser);
@@ -85,7 +110,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       try {
         const parsedUrl = queryString.parseUrl(url);
         const authToken = parsedUrl.query.auth_token as string;
-
         if (authToken) {
           setLoading(true);
           await AsyncStorage.setItem('authToken', authToken);
@@ -101,7 +125,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const subscription = Linking.addEventListener('url', handleLink);
-
     Linking.getInitialURL().then((url) => {
       if (url) handleLink({ url });
     });
@@ -115,7 +138,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const url = `https://proxy.hostakkhor.com/proxy/getsorted?keys=hostakkhor_users_*&skip=0&limit=50&filter=${encodeURIComponent(JSON.stringify({ where: { email: { eq: email } } }))}`;
       const response = await axios.get(url);
-      console.log('Fetched user details:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error fetching user details:', error);
@@ -124,30 +146,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const fetchUserProfile = async (token: string) => {
-    if (!token) {
-      console.error('Token is missing. Cannot fetch user profile.');
-      throw new Error('Token is missing');
-    }
-
+    if (!token) throw new Error('Token is missing');
     try {
-      // Get SSO profile
       const response = await axios.get(`${SSO_SERVER_URL}/api/user/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      console.log('SSO User profile response:', response.data);
       const ssoUserData = response.data;
-      
-      // Fetch internal user details
       const internalUserDetails = await fetchUserDetails(ssoUserData.email);
-      console.log('Internal user details:', internalUserDetails);
       const internalUser = internalUserDetails?.result?.[0]?.value;
-
-      // Generate or use existing internal ID
       const internalId = internalUser?.id || generateUniqueId();
       const userPath = `hostakkhor_users_${internalId}`;
-      
-      // Combine both profiles, ensuring we keep both IDs and all necessary fields
       const combinedUserData: IUser = {
         id: internalId,
         ssoId: ssoUserData.id,
@@ -163,26 +171,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         onboardingCompleted: internalUser?.onboardingCompleted || false,
         role: 'user'
       };
-
-      console.log('Combined user data:', combinedUserData);
-
-      // Save the combined user data
       setUser(combinedUserData);
       await AsyncStorage.setItem('user', JSON.stringify(combinedUserData));
-
       // Update or create internal user record
       const key = userPath;
       await fetch('https://proxy.hostakkhor.com/proxy/putjson', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          key,
-          value: combinedUserData
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value: combinedUserData }),
       });
-
       setIsAuthenticated(true);
     } catch (error: any) {
       console.error('Error fetching user profile:', error);
@@ -218,16 +215,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         token: CLIENT_ID,
         redirectUrl: REDIRECT_URL,
       };
-
       const url = `${SSO_SERVER_URL}/api/auth/login`;
       const response = await axios.post(url, requestData);
-
-      const { token, user: ssoUser } = response.data;
-
+      const { token } = response.data;
       await AsyncStorage.setItem('authToken', token);
       setToken(token);
       await fetchUserProfile(token);
-
       return true;
     } catch (error) {
       console.error('Error during sign-in:', error);
@@ -237,43 +230,97 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-const signUpWithEmail = async (email: string, password: string, name: string): Promise<boolean> => {
-  console.log('Starting signup process...', { email, name });
-  
-  try {
-    const response = await axios.post(`${SSO_SERVER_URL}/api/auth/register`, {
-      email,
-      password,
-      name,
-      token: CLIENT_ID,
-      redirectUrl: REDIRECT_URL,
-    });
-
-    console.log('Signup response status:', response.status);
-    console.log('Signup response data:', JSON.stringify(response.data, null, 2));
-
-    if (response.data.token) {
-      console.log('Token received, proceeding with user profile fetch...');
-      const { token } = response.data;
-      await AsyncStorage.setItem('authToken', token);
-      setToken(token);
-      await fetchUserProfile(token);
-      console.log('Signup process completed successfully');
-      return true;
+  const signUpWithEmail = async (email: string, password: string, name: string): Promise<boolean> => {
+    setLoading(true);
+    try {
+      const response = await axios.post(`${SSO_SERVER_URL}/api/auth/register`, {
+        email,
+        password,
+        name,
+        token: CLIENT_ID,
+        redirectUrl: REDIRECT_URL,
+      });
+      if (response.data.token) {
+        const { token } = response.data;
+        await AsyncStorage.setItem('authToken', token);
+        setToken(token);
+        await fetchUserProfile(token);
+        return true;
+      }
+      return false;
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
     }
+  };
 
-    console.error('No token in response');
-    return false;
-  } catch (error: any) {
-    console.error('Signup error:', {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      headers: error.response?.headers
-    });
-    throw error;
-  }
-};
+  // SOCIAL LOGIN FUNCTIONS
+  const signInWithGoogle = async (): Promise<boolean> => {
+    setLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const tokens = await GoogleSignin.getTokens();
+      const response = await axios.post(`${SSO_SERVER_URL}/api/auth/google`, {
+        token: CLIENT_ID,
+        redirectUrl: REDIRECT_URL,
+        user: {
+          id: userInfo.user.id,
+          name: userInfo.user.name,
+          email: userInfo.user.email,
+          photo: userInfo.user.photo,
+        },
+        idToken: tokens.idToken,
+      });
+      if (response.data.token) {
+        await AsyncStorage.setItem('authToken', response.data.token);
+        setToken(response.data.token);
+        await fetchUserProfile(response.data.token);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Google sign-in error:', error);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signInWithFacebook = async (): Promise<boolean> => {
+    setLoading(true);
+    try {
+      const result = await LoginManager.logInWithPermissions(['public_profile', 'email']);
+      if (result.isCancelled) {
+        setLoading(false);
+        return false;
+      }
+      const data = await AccessToken.getCurrentAccessToken();
+      if (!data?.accessToken) {
+        setLoading(false);
+        throw new Error('No Facebook access token');
+      }
+      const response = await axios.post(`${SSO_SERVER_URL}/api/auth/facebook`, {
+        accessToken: data.accessToken,
+        token: CLIENT_ID,
+        redirectUrl: REDIRECT_URL,
+      });
+      if (response.data.token) {
+        await AsyncStorage.setItem('authToken', response.data.token);
+        setToken(response.data.token);
+        await fetchUserProfile(response.data.token);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Facebook sign-in error:', error);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <AuthContext.Provider
@@ -285,6 +332,8 @@ const signUpWithEmail = async (email: string, password: string, name: string): P
         logout,
         signInWithEmail,
         signUpWithEmail,
+        signInWithGoogle,
+        signInWithFacebook,
         loading,
         fetchUserDetails,
         fetchUserProfile,
@@ -297,8 +346,6 @@ const signUpWithEmail = async (email: string, password: string, name: string): P
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
