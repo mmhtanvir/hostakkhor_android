@@ -9,15 +9,15 @@ import {
   Alert,
   ActivityIndicator
 } from 'react-native';
-import { globalStyles } from '../styles/globalStyles';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { SvgUri } from 'react-native-svg';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
+import { globalStyles } from '../styles/globalStyles';
 
 const SignInScreen = () => {
   const navigation = useNavigation();
-  const { login, signInWithEmail, signUpWithEmail, loading } = useAuth();
+  const { signInWithEmail, signUpWithEmail, signInWithGoogle, loading } = useAuth();
   const [isSignIn, setIsSignIn] = useState(true);
   const [formData, setFormData] = useState({
     email: '',
@@ -35,14 +35,11 @@ const SignInScreen = () => {
       Alert.alert('Error', 'Please fill in all required fields');
       return false;
     }
-
-    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       Alert.alert('Error', 'Please enter a valid email address');
       return false;
     }
-
     if (!isSignIn) {
       if (!formData.name) {
         Alert.alert('Error', 'Please provide your full name');
@@ -57,24 +54,14 @@ const SignInScreen = () => {
         return false;
       }
     }
-
     return true;
   };
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
-
     try {
       if (isSignIn) {
-        // Debug logging
-        console.log('Attempting sign in with:', {
-          email: formData.email,
-          passwordLength: formData.password.length,
-          timestamp: new Date().toISOString()
-        });
-        
         const success = await signInWithEmail(formData.email, formData.password);
-        
         if (success) {
           navigation.navigate('Home');
         } else {
@@ -94,14 +81,7 @@ const SignInScreen = () => {
         }
       }
     } catch (error: any) {
-      console.error('Sign in error details:', {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data
-      });
-
       let errorMessage = 'Authentication failed. Please try again.';
-      
       if (error.response?.status === 401) {
         errorMessage = 'Invalid email or password. Please check your credentials.';
       } else if (error.response?.status === 400) {
@@ -109,8 +89,14 @@ const SignInScreen = () => {
       } else if (error.response?.status === 429) {
         errorMessage = 'Too many attempts. Please try again later.';
       }
-
       Alert.alert('Error', errorMessage);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    const success = await signInWithGoogle();
+    if (success) {
+      navigation.navigate('Home');
     }
   };
 
@@ -137,23 +123,14 @@ const SignInScreen = () => {
           <TouchableOpacity
             style={[globalStyles.socialButton, globalStyles.googleButton]}
             activeOpacity={0.8}
-            onPress={login}
+            onPress={handleGoogleLogin}
             disabled={loading}
           >
             <Image
-              source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg' }}
+              source={{ uri: 'https://www.google.com/favicon.ico' }}
               style={globalStyles.socialIcon}
             />
             <Text style={globalStyles.googleButtonText}>Continue with Google</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[globalStyles.socialButton, globalStyles.facebookButton]}
-            onPress={login}
-            disabled={loading}
-          >
-            <Icon name="facebook" size={20} color="#fff" style={globalStyles.socialIconLeft} />
-            <Text style={globalStyles.facebookButtonText}>Continue with Facebook</Text>
           </TouchableOpacity>
         </View>
 

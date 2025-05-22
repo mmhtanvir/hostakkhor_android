@@ -9,12 +9,8 @@ import {
   REDIRECT_URL,
   CLIENT_ID, 
   GOOGLE_OAUTH_WEB_CLIENT_ID, 
-  GOOGLE_OAUTH_SCOPES ,
-  GOOGLE_REDIRECT_URI,
-  CLIENT_SECRET,
-  G_REDIRECT_URL
+  GOOGLE_OAUTH_SCOPES 
 } from '@env';
-import { id } from 'date-fns/locale';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -148,7 +144,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const ssoUserData = response.data;
       const internalUserDetails = await fetchUserDetails(ssoUserData.email);
       const internalUser = internalUserDetails?.result?.[0]?.value;
-      const internalId = internalUser?.id || generateUniqueId(); 
+      const internalId = internalUser?.id || generateUniqueId();
       const userPath = `hostakkhor_users_${internalId}`;
 
       const combinedUserData: IUser = {
@@ -245,7 +241,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (response.data.token) {
         const { token } = response.data;
-        console.log('Token:', token);
         await AsyncStorage.setItem('authToken', token);
         setToken(token);
         await fetchUserProfile(token);
@@ -258,75 +253,54 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-    const signInWithGoogle = async (): Promise<boolean> => {
-      setLoading(true);
-      try {
-        await GoogleSignin.hasPlayServices();
-        const googleSignInResult = await GoogleSignin.signIn();
-
-        if (googleSignInResult.type !== 'success') {
-          Alert.alert('Google sign-in cancelled');
-          return false;
-        }
-
-        const userObj = googleSignInResult.data.user;
-        const serverAuthCode = googleSignInResult.data.serverAuthCode;
-
-        if (!serverAuthCode || !userObj) {
-          throw new Error('Google auth code or user not available.');
-        }
-
-        console.log('Google user object:', userObj);
-        console.log('Google server auth code:', serverAuthCode);
-
-        // JSON format payload for token exchange
-        const tokenPayload = {
-          code: serverAuthCode,
-          client_id: GOOGLE_OAUTH_WEB_CLIENT_ID,
-          client_secret: CLIENT_SECRET,
-          redirect_uri: G_REDIRECT_URL,
-          grant_type: 'authorization_code',
-        };
-
-        console.log('Token payload:', tokenPayload);
-
-        // Exchange auth code for tokens using JSON format
-        const SSOresponse = await axios.post('https://oauth2.googleapis.com/token',
-          tokenPayload,
-          {
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-
-        console.log('SSO response:', SSOresponse.data);
-
-        const { access_token } = SSOresponse.data;
-        const token = access_token;
-
-        // Fetch user info from Google with access token
-        const userInfoResponse = await axios.get(
-          'https://www.googleapis.com/oauth2/v1/userinfo',
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        const userInfo = userInfoResponse.data;
-        console.log('User info:', userInfo);
-
-        console.log('Token:', token);
-        await AsyncStorage.setItem('authToken', token);
-        setToken(token);
-        await fetchUserProfile(token);
-        return true;
-
-      } catch (error: any) {
-        console.error('Google Sign-In failed:', error);
-        Alert.alert('Google Sign-In Failed', error.message || 'Could not sign in with Google');
+  const signInWithGoogle = async (): Promise<boolean> => {
+    setLoading(true);
+    try {
+      await GoogleSignin.hasPlayServices();
+      const googleSignInResult = await GoogleSignin.signIn();
+      if (googleSignInResult.type !== 'success') {
+        Alert.alert('Google sign-in cancelled');
         return false;
-      } finally {
-        setLoading(false);
       }
-    };
+      const userObj = googleSignInResult.data.user;
+      const idToken = googleSignInResult.data.idToken;
+
+      console.log('Google user object:', userObj);
+      console.log('Google ID token:', idToken);
+
+      if (!userObj || !userObj.id || !idToken) {
+        throw new Error('Google user object or idToken missing. Try again.');
+      }
+
+      // Send Google token and user info to SSO server
+      const response = await axios.post(`https://sso.hostakkhor.com/api/auth/google`, {
+        token: CLIENT_ID,
+        redirectUrl: REDIRECT_URL,
+        user: {
+          id: userObj.id,
+          name: userObj.name,
+          email: userObj.email,
+          photo: userObj.photo,
+        },
+        idToken: idToken,
+      });
+
+      console.log('SSO server response:', response.data);
+
+      const { token } = response.data;
+      await AsyncStorage.setItem('authToken', token);
+      setToken(token);
+      await fetchUserProfile(token);
+
+      return true;
+    } catch (error: any) {
+      console.error('Google Sign-In failed:', error);
+      Alert.alert('Google Sign-In Failed', error.message || 'Could not sign in with Google');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <AuthContext.Provider

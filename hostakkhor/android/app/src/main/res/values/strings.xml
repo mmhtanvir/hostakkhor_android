@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">hostakkhor</string>
+    <string name="facebook_app_id">2366725340377413</string>
+    <string name="fb_login_protocol_scheme">fb2366725340377413</string>
+    <string name="facebook_client_token">ba419c192a439ee9ae68ed2c189b0c83</string>
 </resources>

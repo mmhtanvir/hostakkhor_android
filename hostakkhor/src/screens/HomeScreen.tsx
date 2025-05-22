@@ -360,3 +360,7 @@ export default HomeScreen;
 // git commit -m "your message here"
 // git push
 // npx react-native doctor
+// rd /s /q node_modules
+// rd /s /q android\.gradle
+// rd /s /q android\app\build
+// rd /s /q android\app\.cxx

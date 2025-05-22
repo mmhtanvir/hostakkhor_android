@@ -1,20 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { Linking, Alert } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import queryString from 'query-string';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import { 
-  SSO_SERVER_URL, 
-  REDIRECT_URL,
-  CLIENT_ID, 
-  GOOGLE_OAUTH_WEB_CLIENT_ID, 
-  GOOGLE_OAUTH_SCOPES ,
-  GOOGLE_REDIRECT_URI,
-  CLIENT_SECRET,
-  G_REDIRECT_URL
-} from '@env';
-import { id } from 'date-fns/locale';
+import { LoginManager, AccessToken, Settings } from 'react-native-fbsdk-next';
+import { SSO_SERVER_URL, CLIENT_ID, REDIRECT_URL } from '@env';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -23,15 +13,15 @@ interface AuthContextType {
   logout: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<boolean>;
   signUpWithEmail: (email: string, password: string, name: string) => Promise<boolean>;
-  signInWithGoogle: () => Promise<boolean>;
+  signInWithFacebook: () => Promise<boolean>;
   loading: boolean;
   fetchUserDetails: (email: string) => Promise<any>;
   fetchUserProfile: (token: string) => Promise<void>;
 }
 
 interface IUser {
-  id: string;
-  ssoId: string;
+  id: string;           // Internal app ID
+  ssoId: string;        // SSO ID
   name: string;
   email: string;
   ssoProfileImageUrl?: string;
@@ -59,12 +49,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<IUser | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Facebook SDK initialization
   useEffect(() => {
-    GoogleSignin.configure({
-      webClientId: GOOGLE_OAUTH_WEB_CLIENT_ID,
-      scopes: GOOGLE_OAUTH_SCOPES.split(','),
-      offlineAccess: true,
-    });
+    try {
+      Settings.initializeSDK();
+      console.log('[AuthContext] Facebook SDK initialized');
+    } catch (err) {
+      console.error('[AuthContext] Facebook SDK initialization error:', err);
+    }
   }, []);
 
   useEffect(() => {
@@ -75,50 +67,52 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           AsyncStorage.getItem('authToken'),
           AsyncStorage.getItem('user'),
         ]);
-
+        console.log('[AuthContext] Stored token:', storedToken);
         if (storedToken) {
           setToken(storedToken);
-
           if (storedUser) {
             const parsedUser = JSON.parse(storedUser);
             setUser(parsedUser);
             setIsAuthenticated(true);
+            console.log('[AuthContext] Loaded user from storage:', parsedUser);
           } else {
             await fetchUserProfile(storedToken);
           }
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        // Log initialization error
+        console.error('[AuthContext] Auth initialization error:', error);
       } finally {
         setLoading(false);
       }
     };
-
     initAuth();
   }, []);
 
   useEffect(() => {
     const handleLink = async ({ url }: { url: string }) => {
       try {
+        // Debug: log incoming deep links
+        console.log('[AuthContext] Handling deep link:', url);
         const parsedUrl = queryString.parseUrl(url);
         const authToken = parsedUrl.query.auth_token as string;
-
         if (authToken) {
           setLoading(true);
           await AsyncStorage.setItem('authToken', authToken);
           setToken(authToken);
           await fetchUserProfile(authToken);
           setIsAuthenticated(true);
+          console.log('[AuthContext] Got auth token from deep link:', authToken);
         }
       } catch (error) {
-        console.error('Deep link error:', error);
+        // Log deep link error
+        console.error('[AuthContext] Deep link error:', error);
       } finally {
         setLoading(false);
       }
     };
 
     const subscription = Linking.addEventListener('url', handleLink);
-
     Linking.getInitialURL().then((url) => {
       if (url) handleLink({ url });
     });
@@ -132,25 +126,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const url = `https://proxy.hostakkhor.com/proxy/getsorted?keys=hostakkhor_users_*&skip=0&limit=50&filter=${encodeURIComponent(JSON.stringify({ where: { email: { eq: email } } }))}`;
       const response = await axios.get(url);
+      // Log fetched user details
+      console.log('[AuthContext] Fetched user details:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Error fetching user details:', error);
+      // Log error
+      console.error('[AuthContext] Error fetching user details:', error);
       return null;
     }
   };
 
   const fetchUserProfile = async (token: string) => {
-    if (!token) throw new Error('Token is missing');
+    if (!token) {
+      console.error('[AuthContext] Token is missing. Cannot fetch user profile.');
+      throw new Error('Token is missing');
+    }
     try {
+      // Log start of user profile fetch
+      console.log('[AuthContext] Fetching SSO profile with token:', token);
       const response = await axios.get(`${SSO_SERVER_URL}/api/user/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log('[AuthContext] SSO User profile response:', response.data);
       const ssoUserData = response.data;
+      
+      // Fetch internal user details
       const internalUserDetails = await fetchUserDetails(ssoUserData.email);
+      console.log('[AuthContext] Internal user details:', internalUserDetails);
       const internalUser = internalUserDetails?.result?.[0]?.value;
-      const internalId = internalUser?.id || generateUniqueId(); 
+
+      // Generate or use existing internal ID
+      const internalId = internalUser?.id || generateUniqueId();
       const userPath = `hostakkhor_users_${internalId}`;
 
+      // Combine both profiles
       const combinedUserData: IUser = {
         id: internalId,
         ssoId: ssoUserData.id,
@@ -167,10 +176,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         role: 'user'
       };
 
+      // Log combined user data
+      console.log('[AuthContext] Combined user data:', combinedUserData);
+
       setUser(combinedUserData);
       await AsyncStorage.setItem('user', JSON.stringify(combinedUserData));
 
-      // Save/update internal user record
+      // Update or create internal user record
       const key = userPath;
       await fetch('https://proxy.hostakkhor.com/proxy/putjson', {
         method: 'POST',
@@ -184,8 +196,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
 
       setIsAuthenticated(true);
+      console.log('[AuthContext] User profile fetch/update complete');
     } catch (error: any) {
-      console.error('Error fetching user profile:', error);
+      // Log error during profile fetch
+      console.error('[AuthContext] Error fetching user profile:', error);
       throw error;
     }
   };
@@ -197,9 +211,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setToken(null);
       setIsAuthenticated(false);
       setUser(null);
-      await GoogleSignin.signOut();
+      // Log logout success
+      console.log('[AuthContext] Logged out');
     } catch (error) {
-      console.error('Logout error:', error);
+      // Log logout error
+      console.error('[AuthContext] Logout error:', error);
     } finally {
       setLoading(false);
     }
@@ -214,11 +230,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         token: CLIENT_ID,
         redirectUrl: REDIRECT_URL,
       };
-
+      // Log request data
+      console.log('[AuthContext] signInWithEmail requestData:', requestData);
       const url = `${SSO_SERVER_URL}/api/auth/login`;
       const response = await axios.post(url, requestData);
-
-      const { token } = response.data;
+      const { token, user: ssoUser } = response.data;
+      // Log response
+      console.log('[AuthContext] signInWithEmail response:', response.data);
 
       await AsyncStorage.setItem('authToken', token);
       setToken(token);
@@ -226,7 +244,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       return true;
     } catch (error) {
-      console.error('Error during sign-in:', error);
+      // Log sign-in error
+      console.error('[AuthContext] Error during sign-in:', error);
       return false;
     } finally {
       setLoading(false);
@@ -234,7 +253,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signUpWithEmail = async (email: string, password: string, name: string): Promise<boolean> => {
+    setLoading(true);
     try {
+      // Log sign-up start
+      console.log('[AuthContext] Starting signUpWithEmail:', { email, name });
       const response = await axios.post(`${SSO_SERVER_URL}/api/auth/register`, {
         email,
         password,
@@ -242,10 +264,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         token: CLIENT_ID,
         redirectUrl: REDIRECT_URL,
       });
+      // Log response
+      console.log('[AuthContext] signUpWithEmail response:', response.data);
 
       if (response.data.token) {
         const { token } = response.data;
-        console.log('Token:', token);
         await AsyncStorage.setItem('authToken', token);
         setToken(token);
         await fetchUserProfile(token);
@@ -253,80 +276,67 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       return false;
     } catch (error: any) {
-      console.error('Signup error:', error);
+      // Log sign-up error
+      console.error('[AuthContext] Signup error:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        headers: error.response?.headers
+      });
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
-    const signInWithGoogle = async (): Promise<boolean> => {
-      setLoading(true);
-      try {
-        await GoogleSignin.hasPlayServices();
-        const googleSignInResult = await GoogleSignin.signIn();
-
-        if (googleSignInResult.type !== 'success') {
-          Alert.alert('Google sign-in cancelled');
-          return false;
-        }
-
-        const userObj = googleSignInResult.data.user;
-        const serverAuthCode = googleSignInResult.data.serverAuthCode;
-
-        if (!serverAuthCode || !userObj) {
-          throw new Error('Google auth code or user not available.');
-        }
-
-        console.log('Google user object:', userObj);
-        console.log('Google server auth code:', serverAuthCode);
-
-        // JSON format payload for token exchange
-        const tokenPayload = {
-          code: serverAuthCode,
-          client_id: GOOGLE_OAUTH_WEB_CLIENT_ID,
-          client_secret: CLIENT_SECRET,
-          redirect_uri: G_REDIRECT_URL,
-          grant_type: 'authorization_code',
-        };
-
-        console.log('Token payload:', tokenPayload);
-
-        // Exchange auth code for tokens using JSON format
-        const SSOresponse = await axios.post('https://oauth2.googleapis.com/token',
-          tokenPayload,
-          {
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-
-        console.log('SSO response:', SSOresponse.data);
-
-        const { access_token } = SSOresponse.data;
-        const token = access_token;
-
-        // Fetch user info from Google with access token
-        const userInfoResponse = await axios.get(
-          'https://www.googleapis.com/oauth2/v1/userinfo',
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        const userInfo = userInfoResponse.data;
-        console.log('User info:', userInfo);
-
-        console.log('Token:', token);
-        await AsyncStorage.setItem('authToken', token);
-        setToken(token);
-        await fetchUserProfile(token);
-        return true;
-
-      } catch (error: any) {
-        console.error('Google Sign-In failed:', error);
-        Alert.alert('Google Sign-In Failed', error.message || 'Could not sign in with Google');
-        return false;
-      } finally {
+  const signInWithFacebook = async (): Promise<boolean> => {
+    setLoading(true);
+    try {
+      // Log FB login start
+      console.log('[AuthContext] Attempting Facebook login...');
+      const result = await LoginManager.logInWithPermissions(['public_profile', 'email']);
+      console.log('[AuthContext] Facebook login result:', result);
+      if (result.isCancelled) {
+        console.log('[AuthContext] Facebook login cancelled by user');
         setLoading(false);
+        return false;
       }
-    };
+      // Get current access token
+      const data = await AccessToken.getCurrentAccessToken();
+      console.log('[AuthContext] AccessToken.getCurrentAccessToken() result:', data);
+      if (!data || !data.accessToken) {
+        console.log('[AuthContext] Failed to get Facebook access token');
+        setLoading(false);
+        throw new Error('Failed to get access token from Facebook');
+      }
+      // Log FB access token
+      console.log('[AuthContext] Facebook access token:', data.accessToken);
+
+      // Send to SSO server backend
+      const response = await axios.post(`${SSO_SERVER_URL}/api/auth/facebook`, {
+        accessToken: data.accessToken,
+        token: CLIENT_ID,
+        redirectUrl: REDIRECT_URL,
+      });
+      // Log SSO backend response
+      console.log('[AuthContext] Facebook SSO backend response:', response.data);
+
+      if (response.data.token) {
+        await AsyncStorage.setItem('authToken', response.data.token);
+        setToken(response.data.token);
+        await fetchUserProfile(response.data.token);
+        setLoading(false);
+        return true;
+      }
+      setLoading(false);
+      return false;
+    } catch (error) {
+      setLoading(false);
+      // Log Facebook login error
+      console.error('[AuthContext] Facebook login error:', error);
+      throw error;
+    }
+  };
 
   return (
     <AuthContext.Provider
@@ -337,7 +347,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         logout,
         signInWithEmail,
         signUpWithEmail,
-        signInWithGoogle,
+        signInWithFacebook,
         loading,
         fetchUserDetails,
         fetchUserProfile,

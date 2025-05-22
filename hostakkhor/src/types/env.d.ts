@@ -1,6 +1,25 @@
 declare module '@env' {
-    export const SSO_SERVER_URL: string;
-    export const CLIENT_ID: string;
-    export const REDIRECT_URL: string;
-    export const PROXY_SERVER_URL: string;
-  }
+  export const SSO_SERVER_URL: string;
+  export const CLIENT_ID: string;
+  export const NODE_ENV: string;
+  export const FILE_SERVER_URL: string;
+  export const PROXY_SERVER_URL: string;
+  export const QUARKSHUB_APP_ID: string;
+  export const TENANT: string;
+  export const APP_VERSION: string;
+  export const REDIRECT_URL: string;
+  export const G_REDIRECT_URL: string;
+  export const GOOGLE_OAUTH_WEB_CLIENT_ID: string;
+  export const GOOGLE_OAUTH_SCOPES: string;
+  export const FACEBOOK_APP_ID: string;
+  export const FACEBOOK_CLIENT_TOKEN: string;
+  export const GOOGLE_AUTH_URL: string;
+  export const GOOGLE_TOKEN_URL: string;
+  export const GOOGLE_USERINFO_URL: string;
+  export const FACEBOOK_AUTH_URL: string;
+  export const FACEBOOK_TOKEN_URL: string;
+  export const FACEBOOK_USERINFO_URL: string;
+  export const GOOGLE_REDIRECT_URI: string;
+  export const FACEBOOK_REDIRECT_URI: string;
+  export const CLIENT_SECRET: string;
+}

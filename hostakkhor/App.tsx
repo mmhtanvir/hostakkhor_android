@@ -5,6 +5,9 @@ import { AuthProvider } from './src/contexts/AuthContext';
 import AppNavigator from './src//navigation/AppNavigator';
 import { StatusBar } from 'react-native';
 import { colors } from './src/styles/globalStyles';
+import { Settings } from 'react-native-fbsdk-next';
+
+Settings.initializeSDK();
 
 const App = () => {
   return (
